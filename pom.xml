@@ -1,0 +1,129 @@
+<project>
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.connexta</groupId>
+    <artifactId>osg-eyes</artifactId>
+    <version>0.1-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <clojure.lang.version>1.10.1</clojure.lang.version>
+        <clojure.data.json.version>0.2.7</clojure.data.json.version>
+        <loom.version>1.0.2</loom.version>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>clojars.org</id>
+            <name>Clojars Repository</name>
+            <url>https://repo.clojars.org</url>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <!--
+        Clojure language & JSON support; if this repo is only ever distributed as a CLI app, see if
+        the compiler can be omitted from the dist.
+        -->
+        <dependency>
+            <groupId>org.clojure</groupId>
+            <artifactId>clojure</artifactId>
+            <version>${clojure.lang.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.clojure</groupId>
+            <artifactId>data.json</artifactId>
+            <version>${clojure.data.json.version}</version>
+        </dependency>
+        <!--
+        Loom is the graph library of choice. Dorothy is for drawing GraphViz graphs using a local
+        native executable that will likely be removed in favor of the vis.js library.
+        -->
+        <dependency>
+            <groupId>aysylu</groupId>
+            <artifactId>loom</artifactId>
+            <version>${loom.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dorothy</groupId>
+            <artifactId>dorothy</artifactId>
+            <version>0.0.7</version>
+        </dependency>
+        <!--
+        Everything here, obviously, needs to die. Instead of running Clojure in the OSGi container
+        itself, consumption of those APIs will be replaced with parsing of manifest files. The
+        idea being future static analysis efforts can happen up front, near compilation, not at
+        the end with the integration tests.
+        -->
+        <dependency>
+            <groupId>org.osgi</groupId>
+            <artifactId>org.osgi.core</artifactId>
+            <version>6.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.felix</groupId>
+            <artifactId>org.apache.felix.utils</artifactId>
+            <version>1.10.2</version>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+            If you inform Maven of additional source directories, IDEs like IntelliJ / Cursive
+            will automatically mark them appropriately (https://github.com/connexta/osg-eyes/issues/1).
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>add-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/main/clojure</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+            Compiling Clojure source for a simple command line utility will work for now. Note;
+            however, the above helper plugin will need to be revisited if the project is ever
+            packaged as a library instead of getting compiled ahead of time
+            (https://github.com/connexta/osg-eyes/issues/1).
+            -->
+            <plugin>
+                <groupId>com.theoryinpractise</groupId>
+                <artifactId>clojure-maven-plugin</artifactId>
+                <version>1.8.4</version>
+                <extensions>true</extensions>
+                <executions>
+                    <execution>
+                        <id>compile</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>test</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
