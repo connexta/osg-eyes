@@ -13,6 +13,7 @@
         <clojure.data.json.version>0.2.7</clojure.data.json.version>
         <reply.version>0.4.4</reply.version>
         <loom.version>1.0.2</loom.version>
+        <felix.version>1.11.4</felix.version>
     </properties>
 
     <repositories>
