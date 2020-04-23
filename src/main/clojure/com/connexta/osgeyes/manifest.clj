@@ -1,9 +1,10 @@
 (ns com.connexta.osgeyes.manifest
 
-  "Support for parsing manifest files with OSGi metadata.
+  "Support for parsing manifest files with OSGi metadata. The manifest is an example of a
+  single 'layer' of dependency information.
 
   The public API supports specifying a path to a manifest file or supplying the file's content
-  as a string directly. The result is a map representing the properties in the manifest. Most
+  as a string directly. The result is a map representing the attributes in the manifest. Most
   values are either a standalone string or a coll of strings. The strings in colls tend to be
   fully qualified Java packages/classes/interfaces or Maven artifact names. One noteworthy
   exception is ::Embedded-Artfacts which still retains its properties from the manifest value.
@@ -16,7 +17,7 @@
   * Schema information
 
   The current capabilities are sufficient that a crude bundle graph could be generated from the
-  data. "
+  data."
 
   (:require [clojure.string :as string]
             [com.connexta.osgeyes.env :as env])
@@ -51,8 +52,6 @@
 
 ;; ----------------------------------------------------------------------
 ;; # Manifest Attribute Parsing
-
-(comment (parse-content "Manifest-Version: 1.0"))
 
 (def ^:private osgi-comma-splitter
   (re-pattern
