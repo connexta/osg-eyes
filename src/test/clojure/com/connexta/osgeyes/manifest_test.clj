@@ -44,7 +44,7 @@
          (mf/parse-content "Built-By: hrogers"))))
 
 (deftest parse-bundle-blueprint
-  (is (= {::mf/Bundle-Blueprint "OSGI-INF/blueprint/blueprint.xml"}
+  (is (= {::mf/Bundle-Blueprint '("OSGI-INF/blueprint/blueprint.xml")}
          (mf/parse-content "Bundle-Blueprint: OSGI-INF/blueprint/blueprint.xml"))))
 
 (deftest parse-bundle-description

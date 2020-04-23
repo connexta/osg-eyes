@@ -1,7 +1,10 @@
 (ns com.connexta.osgeyes.manifest
 
   "Support for parsing manifest files with OSGi metadata. The manifest is an example of a
-  single 'layer' of dependency information.
+  single 'layer' of dependency information. Another fitting term would be 'connector' since
+  these types of functions produce collections of edges, effectively linking nodes together.
+
+  Note: While in alpha, the terminology to describe things is still subject to iteration.
 
   The public API supports specifying a path to a manifest file or supplying the file's content
   as a string directly. The result is a map representing the attributes in the manifest. Most
@@ -29,8 +32,11 @@
   (set [::Manifest-Version
         ::Bnd-LastModified
         ::Build-Jdk
+        ::Build-Jdk-Spec
         ::Built-By
+        ::Bundle-Activator
         ::Bundle-Blueprint
+        ::Bundle-Category
         ::Bundle-ClassPath
         ::Bundle-Description
         ::Bundle-DocURL
@@ -41,14 +47,26 @@
         ::Bundle-Vendor
         ::Bundle-Version
         ::Created-By
+        ::Originally-Created-By
+        ::Fragment-Host
+        ::Embed-Transitive
         ::Embed-Dependency
         ::Embedded-Artifacts
+        ::Conditional-Package
+        ::DynamicImport-Package
         ::Export-Package
         ::Export-Service
         ::Import-Package
         ::Import-Service
+        ::Provide-Capability
         ::Require-Capability
-        ::Tool]))
+        ::Tool
+        ::Service-Version
+        ::Karaf-Commands
+        ::Web-ContextPath
+        ::Webapp-Context
+        ;; Temporary, should not couple to specific projects
+        ::DDF-Mime-Type]))
 
 ;; ----------------------------------------------------------------------
 ;; # Manifest Attribute Parsing
@@ -77,8 +95,10 @@
       ;; and the entire matched package is either followed by attributes or nothing
       "(?=;|$)")))
 
-(defn- attr-package-like
-  [[k v]]
+(defn- attr-basic-csv [[k v]]
+  [k (apply list (string/split v #","))])
+
+(defn- attr-package-like [[k v]]
   [k (->> (string/split v osgi-comma-splitter)
           (map #(first (first (re-seq osgi-package-splitter %))))
           (filter #(not (nil? %))))])
@@ -91,8 +111,10 @@
 
 (defmethod ^:private parse-attr :default [attr] attr)
 
-(defmethod ^:private parse-attr ::Embed-Dependency [[k v]] [k (apply list (string/split v #","))])
-(defmethod ^:private parse-attr ::Embedded-Artifacts [[k v]] [k (apply list (string/split v #","))])
+(defmethod ^:private parse-attr ::Bundle-Blueprint [attr] (attr-basic-csv attr))
+(defmethod ^:private parse-attr ::Embed-Dependency [attr] (attr-basic-csv attr))
+(defmethod ^:private parse-attr ::Embedded-Artifacts [attr] (attr-basic-csv attr))
+(defmethod ^:private parse-attr ::Conditional-Package [attr] (attr-basic-csv attr))
 
 (defmethod ^:private parse-attr ::Import-Package [attr] (attr-package-like attr))
 (defmethod ^:private parse-attr ::Export-Package [attr] (attr-package-like attr))
