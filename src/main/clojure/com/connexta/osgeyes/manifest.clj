@@ -71,37 +71,21 @@
 ;; ----------------------------------------------------------------------
 ;; # Manifest Attribute Parsing
 
-(def ^:private osgi-comma-splitter
+(def ^:private package-or-class-matcher
   (re-pattern
     (str
-      ;; match comma symbols such that...
-      ","
-      ;; the characters following the comma conform to... (begin positive lookahead)
-      "(?="
-      ;; any character, except closing parens / brackets, zero or more times
-      "[^\\]\\)]*"
-      ;; terminating with either the next comma, opening form, or end of input
-      "(,|\\[|\\(|$)"
-      ;; end positive lookahead block
-      ")")))
-
-(def ^:private osgi-package-splitter
-  (re-pattern
-    (str
-      ;; match some root package at the beginning of the line
-      "^([a-zA-Z]+)"
+      ;; match some root package
+      "([a-zA-Z]+)"
       ;; followed by one or more subpackages
-      "(\\.[a-zA-Z0-9]+)+"
-      ;; and the entire matched package is either followed by attributes or nothing
-      "(?=;|$)")))
+      "(\\.[a-zA-Z0-9_]+)+"
+      ;; and the entire matched package must be followed by a semicolon
+      "(?=;)")))
 
-(defn- attr-basic-csv [[k v]]
+(defn- handle-basic-csv [[k v]]
   [k (apply list (string/split v #","))])
 
-(defn- attr-package-like [[k v]]
-  [k (->> (string/split v osgi-comma-splitter)
-          (map #(first (first (re-seq osgi-package-splitter %))))
-          (filter #(not (nil? %))))])
+(defn- handle-osgi-packages-and-classes [[k v]]
+  [k (map first (re-seq package-or-class-matcher v))])
 
 (defmulti ^:private parse-attr
           "Parses the manfiest attribute value according to its name. Expected
@@ -111,15 +95,15 @@
 
 (defmethod ^:private parse-attr :default [attr] attr)
 
-(defmethod ^:private parse-attr ::Bundle-Blueprint [attr] (attr-basic-csv attr))
-(defmethod ^:private parse-attr ::Embed-Dependency [attr] (attr-basic-csv attr))
-(defmethod ^:private parse-attr ::Embedded-Artifacts [attr] (attr-basic-csv attr))
-(defmethod ^:private parse-attr ::Conditional-Package [attr] (attr-basic-csv attr))
+(defmethod ^:private parse-attr ::Bundle-Blueprint [attr] (handle-basic-csv attr))
+(defmethod ^:private parse-attr ::Embed-Dependency [attr] (handle-basic-csv attr))
+(defmethod ^:private parse-attr ::Embedded-Artifacts [attr] (handle-basic-csv attr))
+(defmethod ^:private parse-attr ::Conditional-Package [attr] (handle-basic-csv attr))
 
-(defmethod ^:private parse-attr ::Import-Package [attr] (attr-package-like attr))
-(defmethod ^:private parse-attr ::Export-Package [attr] (attr-package-like attr))
-(defmethod ^:private parse-attr ::Import-Service [attr] (attr-package-like attr))
-(defmethod ^:private parse-attr ::Export-Service [attr] (attr-package-like attr))
+(defmethod ^:private parse-attr ::Import-Package [attr] (handle-osgi-packages-and-classes attr))
+(defmethod ^:private parse-attr ::Export-Package [attr] (handle-osgi-packages-and-classes attr))
+(defmethod ^:private parse-attr ::Import-Service [attr] (handle-osgi-packages-and-classes attr))
+(defmethod ^:private parse-attr ::Export-Service [attr] (handle-osgi-packages-and-classes attr))
 
 ;; ----------------------------------------------------------------------
 ;; # Manifest File Parsing
@@ -189,14 +173,6 @@
             (throw (IllegalArgumentException.
                      (str "Unexpected manifest attribute " k " in " path)))))]
     (map check pairs)))
-
-(defn -sp-comma "Not for public consumption, do not call"
-  [text]
-  (string/split text osgi-comma-splitter))
-
-(defn -sp-package "Not for public consumption, do not call"
-  [text]
-  (first (first (re-seq osgi-package-splitter text))))
 
 (defn parse-file
   "Parses the text of a jar's manifest from a file pointed to by the path, passed as a string."

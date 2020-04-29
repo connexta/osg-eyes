@@ -136,20 +136,41 @@
                                 "2.24.0-SNAPSHOT\",commons-lang3-3.9.\n jar;g=\"org.apache.commons"
                                 "\";a=\"commons-lang3\";v=\"3.9\"")))))
 
+(deftest parse-single-export-package-no-attributes
+  (is (= {::mf/Export-Package '("this.package.is.exported")}
+         (mf/parse-content "Export-Package: this.package.is.exported;"))))
+
+(deftest parse-single-export-package-with-newlines-and-two-attributes
+  (is (= {::mf/Export-Package '("some.other.separate.package")}
+         (mf/parse-content "Export-Package: some.other.separate.package;uses:=\"ddf.catalog.data,ddf\n .catalog.filter,ddf.catalog.operation,ddf.catalog.plugin,ddf.catalog.re\n source,ddf.catalog.source,org.codice.ddf.persistence\";version=\"15.8.0\""))))
+
 (deftest parse-export-package
+  (is (= {::mf/Export-Package '("this.package.exported"
+                                 "also.this.one"
+                                 "and.this.one")}
+         (mf/parse-content "Export-Package: this.package.exported;also.this.one;and.this.one;"))))
+
+(deftest parse-export-package-with-uses-attribute
+  (is (= {::mf/Export-Package '("this.package.exported"
+                                 "also.this.one"
+                                 "and.this.one")}
+         (mf/parse-content "Export-Package: this.package.exported;also.this.one;uses:=\"package.one,package.two,package.three\",and.this.one;"))))
+
+(deftest parse-export-package-with-version-attribute
+  (is (= {::mf/Export-Package '("this.package.exported"
+                                 "also.this.one"
+                                 "and.this.one")}
+         (mf/parse-content "Export-Package: this.package.exported;also.this.one;version=\"2.24.0\",and.this.one;"))))
+
+(deftest parse-export-package-with-newlines-and-both-uses-and-version
   (is (= {::mf/Export-Package '("org.codice.ddf.spatial.ogc.csw.catalog.endpoint.transformer"
-                                 "ddf.catalog.operation"
-                                 "ddf.catalog.transform"
-                                 "javax.annotation"
-                                 "org.codice.ddf.spatial.ogc.csw.catalog.actions"
-                                 "org.geotools.filter.visitor"
-                                 "org.opengis.filter"
-                                 "org.opengis.filter.expression"
-                                 "org.opengis.filter.spatial"
-                                 "org.codice.ddf.spatial.ogc.csw.catalog.endpoint.mappings"
-                                 "org.geotools.filter.visitor"
-                                 "org.opengis.filter")}
-         (mf/parse-content (str "Export-Package: org.codice.ddf.spatial.ogc.csw.catalog.endpoint.transfor\n mer;uses:=\"ddf.catalog.data,ddf.catalog.operation,ddf.catalog.transform\n ,javax.annotation,org.codice.ddf.spatial.ogc.csw.catalog.actions,org.ge\n otools.filter.visitor,org.opengis.filter,org.opengis.filter.expression,\n org.opengis.filter.spatial,org.xml.sax.helpers\";version=\"2.24.0\",org.co\n dice.ddf.spatial.ogc.csw.catalog.endpoint.mappings;uses:=\"org.codice.dd\n f.spatial.ogc.csw.catalog.endpoint.transformer,org.geotools.filter.visi\n tor,org.opengis.filter,org.xml.sax.helpers\";version=\"2.24.0\"")))))
+                                 "org.codice.ddf.spatial.ogc.csw.catalog.endpoint.mappings")}
+         (mf/parse-content "Export-Package: org.codice.ddf.spatial.ogc.csw.catalog.endpoint.transfor\n mer;uses:=\"ddf.catalog.data,ddf.catalog.operation,ddf.catalog.transform\n ,javax.annotation,org.codice.ddf.spatial.ogc.csw.catalog.actions,org.ge\n otools.filter.visitor,org.opengis.filter,org.opengis.filter.expression,\n org.opengis.filter.spatial,org.xml.sax.helpers\";version=\"2.24.0\",org.co\n dice.ddf.spatial.ogc.csw.catalog.endpoint.mappings;uses:=\"org.codice.dd\n f.spatial.ogc.csw.catalog.endpoint.transformer,org.geotools.filter.visi\n tor,org.opengis.filter,org.xml.sax.helpers\";version=\"2.24.0\""))))
+
+(deftest parse-export-package-with-newlines-and-both-uses-and-version-then-just-version
+  (is (= {::mf/Export-Package '("org.codice.ddf.migration"
+                                 "org.codice.ddf.util.function")}
+         (mf/parse-content "Export-Package: org.codice.ddf.migration;uses:=\"org.codice.ddf.platform.\n services.common,org.codice.ddf.util.function\";version=\"2.24.0\",org.codi\n ce.ddf.util.function;version=\"2.24.0\""))))
 
 (deftest parse-export-service
   (is (= {::mf/Export-Service '("ddf.catalog.transform.QueryFilterTransformer"
@@ -158,7 +179,12 @@
          (mf/parse-content "Export-Service: ddf.catalog.transform.QueryFilterTransformer;id:List<Str\n ing>=\"{http://www.opengis.net/cat/csw/2.0.2}Record,{http://www.isotc211\n .org/2005/gmd}MD_Metadata,{urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0}\n RegistryPackage\";typeNames:List<String>=\"csw:Record,gmd:MD_Metadata,rim\n :RegistryPackage\";osgi.service.blueprint.compname=cswQueryFilterTransfo\n rmer,ddf.catalog.endpoint.CatalogEndpoint;osgi.service.blueprint.compna\n me=ddf.catalog.endpoint.csw,ddf.catalog.event.Subscriber;osgi.service.b\n lueprint.compname=CswSubscriptionSvc"))))
 
 (deftest parse-import-package
-  (is (= {::mf/Import-Package '("org.codice.ddf.spatial.ogc.csw.catalog.actions"
+  (is (= {::mf/Import-Package '("net.opengis.cat.csw.v_2_0_2"
+                                 "net.opengis.cat.csw.v_2_0_2.dc.elements"
+                                 "net.opengis.filter.v_1_1_0"
+                                 "net.opengis.gml.v_3_1_1"
+                                 "net.opengis.ows.v_1_0_0"
+                                 "org.codice.ddf.spatial.ogc.csw.catalog.actions"
                                  "com.google.common.base"
                                  "com.google.common.collect"
                                  "com.google.common.io"
@@ -187,91 +213,91 @@
                                  "ddf.catalog.data.AttributeRegistry")}
          (mf/parse-content "Import-Service: org.codice.ddf.cxf.client.ClientFactoryFactory;multiple:\n =false,ddf.catalog.filter.FilterAdapter;multiple:=false,ddf.catalog.dat\n a.MetacardType;multiple:=false;filter=(name=csw:Record),com.thoughtwork\n s.xstream.converters.Converter;multiple:=false;filter=(id=csw),ddf.cata\n log.event.EventProcessor;multiple:=false,ddf.catalog.transform.Metacard\n Transformer;multiple:=true,ddf.catalog.transform.QueryFilterTransformer\n Provider;multiple:=false,ddf.security.service.SecurityManager;multiple:\n =false,org.codice.ddf.security.Security;multiple:=false,ddf.catalog.tra\n nsform.QueryResponseTransformer;multiple:=true,ddf.catalog.transform.In\n putTransformer;multiple:=true;filter=(|(mime-type=application/xml)(mime\n -type=text/xml)),ddf.catalog.filter.FilterBuilder;multiple:=false,ddf.c\n atalog.CatalogFramework;multiple:=false,org.codice.ddf.spatial.ogc.csw.\n catalog.endpoint.transformer.CswActionTransformer;multiple:=true;availa\n bility:=optional,ddf.catalog.data.AttributeRegistry;multiple:=false"))))
 
-(deftest package-lines-split-delim-only
-  (is (= [] (mf/-sp-comma ",")) "Splitting on delimiter alone should yield no results")
-  (is (= [] (mf/-sp-comma ",,,,")) "Splitting on delimiter alone should yield no results"))
+#_(deftest package-lines-split-delim-only
+    (is (= [] (mf/-sp-comma ",")) "Splitting on delimiter alone should yield no results")
+    (is (= [] (mf/-sp-comma ",,,,")) "Splitting on delimiter alone should yield no results"))
 
-(deftest package-lines-split-version-range-only
-  (is (= ["(2.8,3)"] (mf/-sp-comma "(2.8,3)")) "Version range should be immune to splitting")
-  (is (= ["[2.8,3)"] (mf/-sp-comma "[2.8,3)")) "Version range should be immune to splitting")
-  (is (= ["(2.8,3]"] (mf/-sp-comma "(2.8,3]")) "Version range should be immune to splitting")
-  (is (= ["[2.8,3]"] (mf/-sp-comma "[2.8,3]")) "Version range should be immune to splitting"))
+#_(deftest package-lines-split-version-range-only
+    (is (= ["(2.8,3)"] (mf/-sp-comma "(2.8,3)")) "Version range should be immune to splitting")
+    (is (= ["[2.8,3)"] (mf/-sp-comma "[2.8,3)")) "Version range should be immune to splitting")
+    (is (= ["(2.8,3]"] (mf/-sp-comma "(2.8,3]")) "Version range should be immune to splitting")
+    (is (= ["[2.8,3]"] (mf/-sp-comma "[2.8,3]")) "Version range should be immune to splitting"))
 
-(deftest package-simple-lines-split-correctly
-  (is (= ["org.one"]
-         (mf/-sp-comma "org.one"))
-      "Simple packages should be getting split")
+#_(deftest package-simple-lines-split-correctly
+    (is (= ["org.one"]
+           (mf/-sp-comma "org.one"))
+        "Simple packages should be getting split")
 
-  (is (= ["org.one" "org.two"]
-         (mf/-sp-comma "org.one,org.two"))
-      "Simple packages should be getting split")
+    (is (= ["org.one" "org.two"]
+           (mf/-sp-comma "org.one,org.two"))
+        "Simple packages should be getting split")
 
-  (is (= ["org.one" "org.two" "org.three"]
-         (mf/-sp-comma "org.one,org.two,org.three"))
-      "Simple packages should be getting split"))
+    (is (= ["org.one" "org.two" "org.three"]
+           (mf/-sp-comma "org.one,org.two,org.three"))
+        "Simple packages should be getting split"))
 
-(deftest package-lines-with-versions-split-correctly
-  (is (= ["my.test.thing" "my.other.thing;version=\"[2.8,3)\""]
-         (mf/-sp-comma "my.test.thing,my.other.thing;version=\"[2.8,3)\""))
-      "Packages with versions should be getting split")
+#_(deftest package-lines-with-versions-split-correctly
+    (is (= ["my.test.thing" "my.other.thing;version=\"[2.8,3)\""]
+           (mf/-sp-comma "my.test.thing,my.other.thing;version=\"[2.8,3)\""))
+        "Packages with versions should be getting split")
 
-  (is (= ["[2.8,3)\"" "net.opengis.cat.csw.v_2_0_2.dc.elements;version=\"[2.8,3)\"" "net."]
-         (mf/-sp-comma "[2.8,3)\",net.opengis.cat.csw.v_2_0_2.dc.elements;version=\"[2.8,3)\",net."))
-      "Packages between versions should be getting split"))
+    (is (= ["[2.8,3)\"" "net.opengis.cat.csw.v_2_0_2.dc.elements;version=\"[2.8,3)\"" "net."]
+           (mf/-sp-comma "[2.8,3)\",net.opengis.cat.csw.v_2_0_2.dc.elements;version=\"[2.8,3)\",net."))
+        "Packages between versions should be getting split"))
 
-(deftest package-simple-names-detected
-  (is (= "javax.activation" (mf/-sp-package "javax.activation"))
-      "Simple package should be detected")
-  (is (= "javax.xml.ws.handler" (mf/-sp-package "javax.xml.ws.handler"))
-      "Simple package should be detected"))
+#_(deftest package-simple-names-detected
+    (is (= "javax.activation" (mf/-sp-package "javax.activation"))
+        "Simple package should be detected")
+    (is (= "javax.xml.ws.handler" (mf/-sp-package "javax.xml.ws.handler"))
+        "Simple package should be detected"))
 
-(deftest package-numeric-names-detected
-  (is (= "org.v1" (mf/-sp-package "org.v1"))
-      "Numeric characters should be supported in packages after the root (org.v1)")
-  (is (= "org.xmlpull.v1" (mf/-sp-package "org.xmlpull.v1"))
-      "Numeric characters should be supported in packages after the root (org.xmlpull.v1)"))
+#_(deftest package-numeric-names-detected
+    (is (= "org.v1" (mf/-sp-package "org.v1"))
+        "Numeric characters should be supported in packages after the root (org.v1)")
+    (is (= "org.xmlpull.v1" (mf/-sp-package "org.xmlpull.v1"))
+        "Numeric characters should be supported in packages after the root (org.xmlpull.v1)"))
 
-(deftest package-names-with-version-detected
-  (is (= "com.thoughtworks.xstream.security"
-         (mf/-sp-package "com.thoughtworks.xstream.security;version=\"[1.4,2)\""))
-      "Package with OSGi version info should be extractable"))
+#_(deftest package-names-with-version-detected
+    (is (= "com.thoughtworks.xstream.security"
+           (mf/-sp-package "com.thoughtworks.xstream.security;version=\"[1.4,2)\""))
+        "Package with OSGi version info should be extractable"))
 
-(deftest class-names-with-blueprint-info-detected
-  (is (= "ddf.catalog.event.Subscriber"
-         (mf/-sp-package
-           "ddf.catalog.event.Subscriber;osgi.service.blueprint.compname=CswSubscriptionSvc"))
-      "Class with blueprint info should be extractable"))
+#_(deftest class-names-with-blueprint-info-detected
+    (is (= "ddf.catalog.event.Subscriber"
+           (mf/-sp-package
+             "ddf.catalog.event.Subscriber;osgi.service.blueprint.compname=CswSubscriptionSvc"))
+        "Class with blueprint info should be extractable"))
 
-(deftest package-or-class-names-with-properties-detected
-  (is (= "org.codice.ddf.spatial.ogc.csw.catalog.endpoint.mappings"
-         (mf/-sp-package
-           (str "org.codice.ddf.spatial.ogc.csw.catalog.endpoint.mappings;"
-                "uses:=\"org.codice.ddf.spatial.ogc.csw.catalog.endpoint.transformer")))
-      "Package with uses:= metadata should be extractable")
+#_(deftest package-or-class-names-with-properties-detected
+    (is (= "org.codice.ddf.spatial.ogc.csw.catalog.endpoint.mappings"
+           (mf/-sp-package
+             (str "org.codice.ddf.spatial.ogc.csw.catalog.endpoint.mappings;"
+                  "uses:=\"org.codice.ddf.spatial.ogc.csw.catalog.endpoint.transformer")))
+        "Package with uses:= metadata should be extractable")
 
-  (is (= "ddf.catalog.transform.InputTransformer"
-         (mf/-sp-package
-           (str "ddf.catalog.transform.InputTransformer;"
-                "multiple:=true;filter=(|(mime-type=application/xml)(mime-type=text/xml))")))
-      "Class name with multiple:= & filter= metadata should be extractable")
+    (is (= "ddf.catalog.transform.InputTransformer"
+           (mf/-sp-package
+             (str "ddf.catalog.transform.InputTransformer;"
+                  "multiple:=true;filter=(|(mime-type=application/xml)(mime-type=text/xml))")))
+        "Class name with multiple:= & filter= metadata should be extractable")
 
-  (is (= "ddf.catalog.transform.QueryFilterTransformer"
-         (mf/-sp-package
-           (str "ddf.catalog.transform.QueryFilterTransformer;id:List<String>"
-                "=\"{http://www.opengis.net/cat/csw/2.0.2}Record")))
-      "Interface name with type metadata should be extractable"))
+    (is (= "ddf.catalog.transform.QueryFilterTransformer"
+           (mf/-sp-package
+             (str "ddf.catalog.transform.QueryFilterTransformer;id:List<String>"
+                  "=\"{http://www.opengis.net/cat/csw/2.0.2}Record")))
+        "Interface name with type metadata should be extractable"))
 
-(deftest package-or-class-noise-and-extra-data-ignored
-  (is (= nil (mf/-sp-package "gmd:MD_Metadata"))
-      "Noisy data should be omitted (gmd:MD_Metadata)")
+#_(deftest package-or-class-noise-and-extra-data-ignored
+    (is (= nil (mf/-sp-package "gmd:MD_Metadata"))
+        "Noisy data should be omitted (gmd:MD_Metadata)")
 
-  (is (= nil (mf/-sp-package (str "{urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0}"
-                                  "RegistryPackage\";typeNames:List<String>=\"csw:Record")))
-      "Noisy data should be omitted ({urn:oasis:names)")
+    (is (= nil (mf/-sp-package (str "{urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0}"
+                                    "RegistryPackage\";typeNames:List<String>=\"csw:Record")))
+        "Noisy data should be omitted ({urn:oasis:names)")
 
-  (is (= nil (mf/-sp-package "{http://www.isotc211.org/2005/gmd}MD_Metadata"))
-      "Noisy data should be omitted ({http://www.isotc211.org/2005/gmd})")
+    (is (= nil (mf/-sp-package "{http://www.isotc211.org/2005/gmd}MD_Metadata"))
+        "Noisy data should be omitted ({http://www.isotc211.org/2005/gmd})")
 
-  (is (= nil (mf/-sp-package
-               "rim:RegistryPackage\";osgi.service.blueprint.compname=cswQueryFilterTransformer"))
-      "Noisy data should be omitted (rim:RegistryPackage)"))
+    (is (= nil (mf/-sp-package
+                 "rim:RegistryPackage\";osgi.service.blueprint.compname=cswQueryFilterTransformer"))
+        "Noisy data should be omitted (rim:RegistryPackage)"))
