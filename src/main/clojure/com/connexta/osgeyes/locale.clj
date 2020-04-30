@@ -14,8 +14,7 @@
   For now only the project locale is supported and it assumes the project is a Maven project."
 
   (:require [clojure.java.io :as io]
-            [com.connexta.osgeyes.manifest :as manifest]
-            [com.connexta.osgeyes.env :as env]))
+            [com.connexta.osgeyes.manifest :as manifest]))
 
 ;; ----------------------------------------------------------------------
 ;; # Repository Manifests
@@ -29,6 +28,22 @@
   (and
     (= (.getName file) "MANIFEST.MF")
     (.contains (.getParent file) "/target/classes/META-INF")))
+
+;; ----------------------------------------------------------------------
+;; # Repository Graph Generation
+;;
+;; Dispatch control for going from a locale instance, through all available connectors, to a final
+;; collection of edges.
+;;
+
+(defn gen-edges
+  "Given a locale, returns a list of edges."
+  [locale]
+  (let [connectors [manifest/locale->edges]]
+    (->> connectors
+         (map #(% locale))
+         (flatten)
+         (distinct))))
 
 ;; ----------------------------------------------------------------------
 ;; # Repository Discovery
@@ -65,4 +80,5 @@
   (->> (get-relevant-file-paths path)
        ;; Does Clojure have a "cold start" w.r.t threading? - might be REPL / JVM related
        (pmap manifest/parse-file)
-       (pmap #(vector (str qual "/" (::manifest/Bundle-SymbolicName %)) %))))
+       (map #(vector (str qual "/" (::manifest/Bundle-SymbolicName %)) %))
+       (into {})))

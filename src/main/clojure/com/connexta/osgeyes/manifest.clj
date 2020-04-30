@@ -69,6 +69,83 @@
         ::DDF-Mime-Type]))
 
 ;; ----------------------------------------------------------------------
+;; # Manifest Graph Assembly
+;;
+;; Call chain for transforming parsed entities into a collection of edges.
+;;
+
+(def test-locale
+  {"sample/dir1" {::Import-Package '("pkg.1" "pkg.2")
+                  ::Export-Package '("pkg.9" "pkg.8")}
+   "sample/dir2" {::Import-Package '()
+                  ::Export-Package '("pkg.2" "pkg.x")}
+   "sample/dir3" {::Import-Package '()
+                  ::Export-Package '("pkg.1" "pkg.y")}
+   "sample/dir4" {::Import-Package '("pkg.9" "pkg.2" "pkg.x" "pkg.y")
+                  ::Export-Package '("pkg.z")}})
+(comment
+  "Note, this section still needs tests"
+  (let [artifact->imports ((attr-extraction-fn ::Import-Package) test-locale)
+        artifact->exports ((attr-extraction-fn ::Export-Package) test-locale)
+        artifact->import (multimap-collapse artifact->imports)
+        export->artifact (multimap-invert artifact->exports)]
+    export->artifact)
+  (locale->edges test-locale))
+
+(defn- multimap-invert
+  "Inverts a multi-value map.
+  Turns a map whose values are colls into the reverse view where each value in each coll
+  becomes a key mapped to its original key. For non-unique values in colls across different
+  keys, the last one in wins.
+
+  (collmap-inverted {:a [1 2] :b [2 3]}) => {1 :a, 2 :b, 3 :b}
+  "
+  [m]
+  (->> m
+       (map (fn [[k vs]] (map vector vs (repeat k))))
+       (apply concat)
+       (into {})))
+
+(defn- multimap-collapse
+  "Collapses a multi-value map into vector pairs.
+  Turns a map whose values are colls into a coll of size-2 vectors representing the entire
+  mapping, akin to a list of edges in a graph. Values in the vectors are not colls.
+
+  (collmap-collapsed {:a [:x :y], :b [:s :t]}) => ([:a :x] [:a :y] [:b :s] [:b :t])
+  "
+  [m]
+  (mapcat (fn [[k v]] (map vector (repeat k) v)) m))
+
+(defn- attr-extraction-fn [key]
+  (fn [locale] (into {} (map (fn [[k v]] [k (get v key)]) locale))))
+
+(defn locale->edges
+  "Given a full scan of a locale instance, pull out the pieces of data the manifest can
+  operate on and generate a normalized list of dependency graph edges. The definition
+  of an edge is {:in \"qual/node\" :out \"qual/node\" :cause \"thing.that.caused.connection\"}."
+  [locale]
+  (let [artifact->imports ((attr-extraction-fn ::Import-Package) locale)
+        artifact->exports ((attr-extraction-fn ::Export-Package) locale)
+        ;; this approach assumes imports are the source of truth
+        ;; verify handling this the opposite way doesn't provide new, undetected edges
+        ;; (should be fine)
+        artifact->import (multimap-collapse artifact->imports)
+        export->artifact (multimap-invert artifact->exports)
+        ;; revisit this - the validation is tempting to enforce all the time but there
+        ;; are too many edge cases, such as exports from bundle zero
+        fail-on-no-exporter false]
+    (->> artifact->import
+         (map #(let [node-to (first %)
+                     node-from (export->artifact (second %))
+                     cause (second %)]
+                 (if (and fail-on-no-exporter (nil? node-from))
+                   (throw (IllegalStateException.
+                            (str "No export found for import " cause " in bundle " node-to)))
+                   [node-to node-from cause])))
+         (filter #(second %))
+         (map #(hash-map :to (get % 0) :from (get % 1) :cause (get % 2) :type "bundle/package")))))
+
+;; ----------------------------------------------------------------------
 ;; # Manifest Attribute Parsing
 
 (def ^:private package-or-class-matcher
