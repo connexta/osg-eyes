@@ -116,16 +116,16 @@
   [m]
   (mapcat (fn [[k v]] (map vector (repeat k) v)) m))
 
-(defn- attr-extraction-fn [key]
-  (fn [locale] (into {} (map (fn [[k v]] [k (get v key)]) locale))))
+(defn- extract-attr [attr locale]
+  (into {} (map (fn [[k v]] [k (get v attr)]) locale)))
 
 (defn locale->edges
   "Given a full scan of a locale instance, pull out the pieces of data the manifest can
   operate on and generate a normalized list of dependency graph edges. The definition
   of an edge is {:in \"qual/node\" :out \"qual/node\" :cause \"thing.that.caused.connection\"}."
   [locale]
-  (let [artifact->imports ((attr-extraction-fn ::Import-Package) locale)
-        artifact->exports ((attr-extraction-fn ::Export-Package) locale)
+  (let [artifact->imports (extract-attr ::Import-Package locale)
+        artifact->exports (extract-attr ::Export-Package locale)
         ;; this approach assumes imports are the source of truth
         ;; verify handling this the opposite way doesn't provide new, undetected edges
         ;; (should be fine)
@@ -135,15 +135,16 @@
         ;; are too many edge cases, such as exports from bundle zero
         fail-on-no-exporter false]
     (->> artifact->import
-         (map #(let [node-to (first %)
-                     node-from (export->artifact (second %))
+         (map #(let [node-import (first %)
+                     node-export (export->artifact (second %))
                      cause (second %)]
-                 (if (and fail-on-no-exporter (nil? node-from))
+                 (if (and fail-on-no-exporter (nil? node-export))
                    (throw (IllegalStateException.
-                            (str "No export found for import " cause " in bundle " node-to)))
-                   [node-to node-from cause])))
+                            (str "No export found for import " cause " in bundle " node-import)))
+                   [node-import node-export cause])))
          (filter #(second %))
-         (map #(hash-map :to (get % 0) :from (get % 1) :cause (get % 2) :type "bundle/package")))))
+         ;; the importer has an implicit dependency on the exporter
+         (map #(hash-map :from (get % 0) :to (get % 1) :cause (get % 2) :type "bundle/package")))))
 
 ;; ----------------------------------------------------------------------
 ;; # Manifest Attribute Parsing
