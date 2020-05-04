@@ -13,22 +13,21 @@
 (def ^:private repos-dir (System/getProperty "repos.home"))
 (def ^:private repos-root (if repos-dir repos-dir app-dir))
 
-(defn- resolver-fn [target-root]
-  (fn [rel-path]
-    (let [root
-          (if (string/ends-with? target-root "/")
-            target-root
-            (str target-root "/"))
-          ;; Make this OS agnostic later
-          rest-of-path
-          (if (string/starts-with? rel-path "/")
-            (throw (IllegalArgumentException.
-                     (str "Path is absolute but should be relative: " rel-path)))
-            rel-path)]
-      (str root rest-of-path))))
+(defn- resolve-as [target-root rel-path]
+  (let [root
+        (if (string/ends-with? target-root "/")
+          target-root
+          (str target-root "/"))
+        ;; Make this OS agnostic later
+        rest-of-path
+        (if (string/starts-with? rel-path "/")
+          (throw (IllegalArgumentException.
+                   (str "Path is absolute but should be relative: " rel-path)))
+          rel-path)]
+    (str root rest-of-path)))
 
 (defn list-subdirs []
-  (let [^String dir app-dir
+  (let [^String dir repos-root
         ^File dir-file (File. dir)]
     (->> dir-file
          (.listFiles)
@@ -37,6 +36,6 @@
          (map #(first (string/split % #"\\.")))
          (filter #(not (string/starts-with? % "."))))))
 
-(defn resolve-tmp "Resolves rel against tmp." [rel] ((resolver-fn tmp-dir) rel))
-(defn resolve-subdir "Resolves rel against current working dir." [rel] ((resolver-fn app-dir) rel))
-(defn resolve-repo "Resolves rel specifically for repos." [rel] ((resolver-fn repos-root) rel))
+(defn resolve-tmp "Resolves rel against tmp." [rel] (resolve-as tmp-dir rel))
+(defn resolve-subdir "Resolves rel against current working dir." [rel] (resolve-as app-dir rel))
+(defn resolve-repo "Resolves rel specifically for repos." [rel] (resolve-as repos-root rel))
