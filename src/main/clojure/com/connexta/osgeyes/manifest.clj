@@ -165,6 +165,9 @@
 (defn- handle-osgi-packages-and-classes [[k v]]
   [k (map first (re-seq package-or-class-matcher v))])
 
+(defn- handle-bundle-symbolic-name [[k v]]
+  [k (first (string/split v #";"))])
+
 (defmulti ^:private parse-attr
           "Parses the manfiest attribute value according to its name. Expected
           input is a size-2 vector representing the key-value pair. Returns a
@@ -172,6 +175,7 @@
           #(first %))
 
 (defmethod ^:private parse-attr :default [attr] attr)
+(defmethod ^:private parse-attr ::Bundle-SymbolicName [attr] (handle-bundle-symbolic-name attr))
 
 (defmethod ^:private parse-attr ::Bundle-Blueprint [attr] (handle-basic-csv attr))
 (defmethod ^:private parse-attr ::Embed-Dependency [attr] (handle-basic-csv attr))
