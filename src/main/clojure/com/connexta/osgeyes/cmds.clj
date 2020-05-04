@@ -144,12 +144,17 @@
   ([] (list-connections 50 [:node "ddf/.*"
                             :node ".*catalog.*|.*spatial.*"
                             :node "(?!.*plugin.*$).*"]))
-  ([max f] (->> @cache
-                (locale/gen-edges)
-                (filter (filter->predicate f))
-                (take max)
-                (clojure.pprint/print-table)
-                (println))))
+  ([max f] (let [with-output #(do (clojure.pprint/print-table %)
+                                  (str "Printed " (count %) " dependencies"))]
+             (->> @cache
+                  (locale/gen-edges)
+                  (filter (filter->predicate f))
+                  ;; by default, do not print duplicate dependencies for each cause
+                  (map #(dissoc % :cause))
+                  (distinct)
+                  ;; --
+                  (take max)
+                  (with-output)))))
 
 (defn draw-graph
   "Renders a graph of edges as HTML and opens the file in the browser. The default filter includes
