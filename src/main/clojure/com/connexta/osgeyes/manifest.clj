@@ -74,24 +74,6 @@
 ;; Call chain for transforming parsed entities into a collection of edges.
 ;;
 
-(def test-locale
-  {"sample/dir1" {::Import-Package '("pkg.1" "pkg.2")
-                  ::Export-Package '("pkg.9" "pkg.8")}
-   "sample/dir2" {::Import-Package '()
-                  ::Export-Package '("pkg.2" "pkg.x")}
-   "sample/dir3" {::Import-Package '()
-                  ::Export-Package '("pkg.1" "pkg.y")}
-   "sample/dir4" {::Import-Package '("pkg.9" "pkg.2" "pkg.x" "pkg.y")
-                  ::Export-Package '("pkg.z")}})
-(comment
-  "Note, this section still needs tests"
-  (let [artifact->imports ((attr-extraction-fn ::Import-Package) test-locale)
-        artifact->exports ((attr-extraction-fn ::Export-Package) test-locale)
-        artifact->import (multimap-collapse artifact->imports)
-        export->artifact (multimap-invert artifact->exports)]
-    export->artifact)
-  (locale->edges test-locale))
-
 (defn- multimap-invert
   "Inverts a multi-value map.
   Turns a map whose values are colls into the reverse view where each value in each coll
@@ -116,25 +98,22 @@
   [m]
   (mapcat (fn [[k v]] (map vector (repeat k) v)) m))
 
-(defn- extract-attr [attr locale]
+(defn- extract-attr
+  ;; Note! Locale currently assumed to be manifest exclusively, not iteration of data sources
+  "Returns a simplified, unnested node->attribute map for the specified locale attribute."
+  [attr locale]
   (into {} (map (fn [[k v]] [k (get v attr)]) locale)))
 
-(defn locale->edges
-  "Given a full scan of a locale instance, pull out the pieces of data the manifest can
-  operate on and generate a normalized list of dependency graph edges. The definition
-  of an edge is {:in \"qual/node\" :out \"qual/node\" :cause \"thing.that.caused.connection\"}."
-  [locale]
-  (let [artifact->imports (extract-attr ::Import-Package locale)
-        artifact->exports (extract-attr ::Export-Package locale)
-        ;; this approach assumes imports are the source of truth
-        ;; verify handling this the opposite way doesn't provide new, undetected edges
-        ;; (should be fine)
-        artifact->import (multimap-collapse artifact->imports)
+(defn- import-export-maps->edges
+  "Generate dependency graph edges by matching imports->exports."
+  [type artifact->imports artifact->exports]
+  (let [artifact->import (multimap-collapse artifact->imports)
         export->artifact (multimap-invert artifact->exports)
-        ;; revisit this - the validation is tempting to enforce all the time but there
-        ;; are too many edge cases, such as exports from bundle zero
+        ;; keep this off for now, not all imports have a matching export (i.e. bundle zero exports)
         fail-on-no-exporter false]
     (->> artifact->import
+         ;; the following approach assumes imports are the source of truth
+         ;; handling this the opposite way shouldn't provide new, undetected edges
          (map #(let [node-import (first %)
                      node-export (export->artifact (second %))
                      cause (second %)]
@@ -143,8 +122,24 @@
                             (str "No export found for import " cause " in bundle " node-import)))
                    [node-import node-export cause])))
          (filter #(second %))
-         ;; the importer has an implicit dependency on the exporter
-         (map #(hash-map :from (get % 0) :to (get % 1) :cause (get % 2) :type "bundle/package")))))
+         ;; the importer depends on the exporter
+         (map #(hash-map :from (get % 0) :to (get % 1) :cause (get % 2) :type type)))))
+
+(defn locale->edges
+  "Given a full scan of a locale instance, pull out the pieces of data the manifest can
+  operate on and generate a normalized list of dependency graph edges. The definition
+  of an edge is:
+  {:from \"qual/node\" :to \"qual/node\" :cause \"thing.that.caused.connection\" :type \"type\"}."
+  [locale]
+  (flatten
+    [(import-export-maps->edges
+       "bundle/package"
+       (extract-attr ::Import-Package locale)
+       (extract-attr ::Export-Package locale))
+     (import-export-maps->edges
+       "bundle/service"
+       (extract-attr ::Import-Service locale)
+       (extract-attr ::Export-Service locale))]))
 
 ;; ----------------------------------------------------------------------
 ;; # Manifest Attribute Parsing

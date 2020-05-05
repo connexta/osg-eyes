@@ -2,6 +2,57 @@
   (:require [clojure.test :refer :all]
             [com.connexta.osgeyes.manifest :as mf]))
 
+;; ----------------------------------------------------------------------
+;; # Manifest Edge Assembly
+;;
+
+(def test-locale
+  {"sample/dir1" {::mf/Import-Package '("pkg.1" "pkg.2")
+                  ::mf/Export-Package '("pkg.9" "pkg.8")
+                  ::mf/Import-Service '("svc.1" "svc.2")
+                  ::mf/Export-Service '("svc.9" "svc.8")}
+   "sample/dir2" {::mf/Import-Package '()
+                  ::mf/Export-Package '("pkg.2" "pkg.x")
+                  ::mf/Import-Service '()
+                  ::mf/Export-Service '("svc.2" "svc.x")}
+   "sample/dir3" {::mf/Import-Package '()
+                  ::mf/Export-Package '("pkg.1" "pkg.y")
+                  ::mf/Import-Service '()
+                  ::mf/Export-Service '("svc.1" "svc.y")}
+   "sample/dir4" {::mf/Import-Package '("pkg.9" "pkg.2" "pkg.x" "pkg.y")
+                  ::mf/Export-Package '("pkg.z")
+                  ::mf/Import-Service '("svc.9" "svc.2" "svc.x" "svc.y")
+                  ::mf/Export-Service '("svc.z")}
+   "sample/dir5" {::mf/Import-Package '("pkg.z" "pkg.8")
+                  ::mf/Export-Package '()
+                  ::mf/Import-Service '("svc.z" "svc.8")
+                  ::mf/Export-Service '()}})
+
+(deftest gen-edges-from-locale
+  (is (= (mf/locale->edges test-locale)
+         '({:cause "pkg.1", :type "bundle/package", :from "sample/dir1", :to "sample/dir3"}
+           {:cause "pkg.2", :type "bundle/package", :from "sample/dir1", :to "sample/dir2"}
+           {:cause "pkg.9", :type "bundle/package", :from "sample/dir4", :to "sample/dir1"}
+           {:cause "pkg.2", :type "bundle/package", :from "sample/dir4", :to "sample/dir2"}
+           {:cause "pkg.x", :type "bundle/package", :from "sample/dir4", :to "sample/dir2"}
+           {:cause "pkg.y", :type "bundle/package", :from "sample/dir4", :to "sample/dir3"}
+           {:cause "pkg.z", :type "bundle/package", :from "sample/dir5", :to "sample/dir4"}
+           {:cause "pkg.8", :type "bundle/package", :from "sample/dir5", :to "sample/dir1"}
+           {:cause "svc.1", :type "bundle/service", :from "sample/dir1", :to "sample/dir3"}
+           {:cause "svc.2", :type "bundle/service", :from "sample/dir1", :to "sample/dir2"}
+           {:cause "svc.9", :type "bundle/service", :from "sample/dir4", :to "sample/dir1"}
+           {:cause "svc.2", :type "bundle/service", :from "sample/dir4", :to "sample/dir2"}
+           {:cause "svc.x", :type "bundle/service", :from "sample/dir4", :to "sample/dir2"}
+           {:cause "svc.y", :type "bundle/service", :from "sample/dir4", :to "sample/dir3"}
+           {:cause "svc.z", :type "bundle/service", :from "sample/dir5", :to "sample/dir4"}
+           {:cause "svc.8", :type "bundle/service", :from "sample/dir5", :to "sample/dir1"}))))
+
+(comment (mf/locale->edges test-locale))
+
+;; ----------------------------------------------------------------------
+;; # Manifest Parsing
+;;
+
 (deftest parse-invalid-manifest
   ;; thrown? cannot be resolved
   ;; https://github.com/cursive-ide/cursive/issues/238
