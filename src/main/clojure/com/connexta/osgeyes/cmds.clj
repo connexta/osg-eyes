@@ -6,7 +6,6 @@
 
   (:require [com.connexta.osgeyes.locale :as locale]
             [com.connexta.osgeyes.graph :as graph]
-            [loom.graph :as lm-gra]
             [com.connexta.osgeyes.env :as env]
             [clojure.string :as string])
   (:import (java.awt Desktop)
@@ -118,16 +117,55 @@
 
 (comment
   "Remember, still need tests for these things"
-  ;; ---
+  ;; --- Navigation
+  (open-tmp-dir)
+  (open-working-dir)
+  (open-repos-dir)
+  ;; --- Index
   (count @cache)
+  (index-load)
+  (index-dump)
   (index-repos "ddf")
+  ;; --- Viz
   (count (filter (filter->predicate default-filter) (locale/gen-edges @cache)))
   (take 10 (filter default-filter (locale/gen-edges @cache)))
   (draw-graph (filter->predicate default-filter)))
 
-(defn index-repos
-  ""
-  [& repos]
+;;
+;; Convenience commands for navigating to specific directories.
+;;
+
+(defn- !open-dir [dir] (do (!open-file-in-browser dir) (str "Navigating to " dir)))
+(defn open-tmp-dir [] (!open-dir (env/resolve-tmp "")))
+(defn open-working-dir [] (!open-dir (env/resolve-subdir "")))
+(defn open-repos-dir [] (!open-dir (env/resolve-repo "")))
+
+;;
+;; Save / restore dependency data so that the repo can be iterated upon and rebuilt
+;; while also doing analysis. It's time consuming to jump back and forth between master
+;; and stable branches when a build is necessary, especially across dependent projects.
+;;
+
+(defn index-load
+  ([]
+   (index-load (env/resolve-tmp "viz-index.edn")))
+  ([path]
+   (->> (slurp path)
+        (read-string)
+        (swap! cache #(identity %2))
+        (count)
+        (hash-map :manifests)
+        (do (println "Dependency cache loaded: ")))))
+
+(defn index-dump
+  ([]
+   (index-dump (env/resolve-tmp "viz-index.edn")))
+  ([path]
+   (if (empty? @cache)
+     "No cache exists to dump"
+     (do (spit path (with-out-str (pr @cache)) :create true) (str "Index written to " path)))))
+
+(defn index-repos [& repos]
   (let [agg-with-repo #(locale/aggregate % (env/resolve-repo %))
         with-output #(do (println (str (count repos) " repositories indexed: ")) %)]
     (->> repos
