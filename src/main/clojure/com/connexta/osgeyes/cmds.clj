@@ -6,8 +6,7 @@
 
   (:require [com.connexta.osgeyes.locale :as locale]
             [com.connexta.osgeyes.graph :as graph]
-            [com.connexta.osgeyes.env :as env]
-            [clojure.string :as string])
+            [com.connexta.osgeyes.env :as env])
   (:import (java.awt Desktop)
            (java.io File)))
 
@@ -50,10 +49,7 @@
 (defn- ^:private filter-valid-shape?
   "Validate the shape of a filter f and provide useful error messages."
   [f]
-  (cond (not (vector? f))
-        (throw (IllegalArgumentException.
-                 (str "Argument filter must be a vector, but was " f)))
-        (empty? f)
+  (cond (empty? f)
         (throw (IllegalArgumentException.
                  (str "Filter vector cannot be empty")))
         (odd? (count f))
@@ -104,10 +100,42 @@
   filter edges: (filter (filter->predicate [:node \"regex\" ...]) edges)"
   [f]
   (->> f
+       (#(if (vector? %)
+           %
+           (throw (IllegalArgumentException.
+                    (str "Argument filter must be a vector, but was " %)))))
+       ;; allow nesting for convenience
+       (flatten)
+       (apply vector)
+       ;; validation of final form
        (filter-valid-shape?)
        (partition 2)
        (map filter-pair-valid-types?)
        (pred-fn)))
+
+(comment
+  (filter->predicate '())
+  (filter->predicate [])
+  (filter->predicate [:term])
+  (filter->predicate [:term "term" "hi"])
+  (filter->predicate [[]])
+  (filter->predicate [[:term]])
+  (filter->predicate [[:term] ["term"]])
+  (filter->predicate [[:term] ["term"] [:term]])
+  (filter->predicate [[:term "one"] ["term"] [:term "two"]])
+
+  ((filter->predicate [:term :term]) {})
+  ((filter->predicate ["term" :term]) {})
+  ((filter->predicate [:term "term"]) {})
+  ((filter->predicate [:from "term"]) {:from "term"})
+
+  ((filter->predicate [:node "term"]) {:from "my-term" :to "your-term"})
+  ((filter->predicate [:node "term"]) {:from "term" :to "your-term"})
+  ((filter->predicate [:node "term"]) {:from "my-term" :to "term"})
+  ((filter->predicate [:node "term"]) {:from "term" :to "term"})
+
+  ((filter->predicate [[:node "one.*" :node ".*two.*"] :cause ".*package.*"])
+   {:from "one-two-three" :to "one-three-two" :cause "some.package"}))
 
 ;; ----------------------------------------------------------------------
 ;; # Public CLI
