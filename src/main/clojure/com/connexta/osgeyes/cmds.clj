@@ -23,6 +23,8 @@
 (def ^:private default-filter
   [:node "ddf/.*" :node ".*catalog.*|.*spatial.*" :node "(?!.*plugin.*$).*"])
 
+(def sel_default [:node "ddf/.*" :node ".*catalog.*|.*spatial.*" :node "(?!.*plugin.*$).*"])
+
 ;; ----------------------------------------------------------------------
 ;; # Private helpers
 ;;
@@ -204,7 +206,7 @@
          (hash-map :manifests)
          (with-output))))
 
-(defn list-connections
+(defn ^:deprecated list-connections
   "Lists connections as a nicely formatted table. Displays no more than 50 by default, or max if it
   is specified. The default filter includes only DDF Catalog and Spatial nodes, but no plugins."
   ([] (list-connections 50 [:node "ddf/.*"
@@ -221,6 +223,25 @@
                   ;; --
                   (take max)
                   (with-output)))))
+
+(defn list-edges "New way to list things - takes a filter & options."
+  [f & {:keys [max cause? type?]
+        :or   {max 50 cause? false type? false}}]
+  (let [dissoc-cause #(dissoc % :cause)
+        dissoc-type #(dissoc % :type)]
+    (->> @cache
+         (locale/gen-edges)
+         (filter (filter->predicate f))
+         ;; by default, do not print duplicate dependencies for each cause
+         (#(if cause? % (distinct (map dissoc-cause %))))
+         (#(if type? % (map dissoc-type %)))
+         (take max)
+         (#(do (clojure.pprint/print-table %)
+               (str "Printed " (count %) " dependencies"))))))
+
+(comment
+  (list-edges sel_default)
+  (list-edges sel_default :cause? true :type? true))
 
 (defn draw-graph
   "Renders a graph of edges as HTML and opens the file in the browser. The default filter includes
