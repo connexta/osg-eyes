@@ -1,11 +1,42 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <style>#mynetwork {width: 90%; height: 1100px; border: 1px solid lightgray;}
+    <style>
+    #disclaimer {font-family: Arial, Helvetica, sans-serif;}
+    #mynetwork {width: 90%; height: 1100px; border: 1px solid lightgray;}
     </style>
 </head>
 
 <body>
+<!-- Disclaimer regarding the data -->
+<div id="disclaimer">
+    <h2>Osg-Eyes</h2>
+    Disclaimer:
+    <ul>
+        <li>
+            When leveraging this tool for insights, please verify the pom and manifest
+            of the artifacts whose edges are in question.
+        </li>
+        <li>
+            Artifact (bundle) edges are created by scanning manifests and linking up
+            import and export statements.
+        </li>
+        <li>
+            It is possible, and completely expected behavior, that some edges displayed
+            won't actually reflect the services deployed in a particular distribution -
+            they indicate potential dependencies based upon the entire repository scan.
+        </li>
+        <li>
+            While significantly less likely, packages could also behave this way - if
+            multiple artifacts exist in the repo that provide the same package, despite
+            only one getting deployed, the diagram will show both dependencies.
+        </li>
+        <li>
+            The above describes expected behavior, but <b>if any dependency edges are
+            found to be missing entirely,</b> that is a bug and should be reported.
+        </li>
+    </ul>
+</div>
 <!-- Area where the viz will be drawn -->
 <div id="mynetwork"></div>
 
