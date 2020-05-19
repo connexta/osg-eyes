@@ -18,9 +18,20 @@
      (println)
      (println "        Exit: Control+D or (exit) or (quit)")
      (println "    Commands: (help)")
-     (println "        Docs: (doc function-name-here)")
-     (println "              (find-doc \"part-of-name-here\")")
-     (println "Find by Name: (find-name \"part-of-name-here\")")))
+     (println "              (list-edges SELECTION OPTIONS)")
+     (println "              (list-edges [:node \".*\"] :max 50 :cause? false :type? false)")
+     (println "              (draw-graph SELECTION)")
+     (println "              (draw-graph [:node \".*\"])")
+     (println "  Management: (load-file PATH)")
+     (println "              (index-load PATH)")
+     (println "              (index-repos REPO_PATH_1 REPO_PATH_2 ...)")
+     (println "              (open-repos-dir)")
+     (println "              (open-tmp-dir)")
+     (println "              (open-working-dir)")
+     ;; Eventually support dynamic docs from the Clojure Fn docstrings
+     #_(println "        Docs: (doc function-name-here)")
+     #_(println "              (find-doc \"part-of-name-here\")")
+     #_(println "Find by Name: (find-name \"part-of-name-here\")")))
 
 (def ^:private application-init
   "The following snippet evals to bootstrapping tasks for the app's REPL ns. This code creates
