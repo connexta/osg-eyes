@@ -26,14 +26,19 @@
           rel-path)]
     (str root rest-of-path)))
 
-(defn list-subdirs []
+(defn list-subdirs
+  "Lists subdirectories in the repos root directory. Directories cannot contain whitespace
+  or a dot separator."
+  []
   (let [^String dir repos-root
         ^File dir-file (File. dir)]
     (->> dir-file
          (.listFiles)
          (vec)
+         (filter #(.isDirectory %))
          (map #(.getName %))
-         (map #(first (string/split % #"\\.")))
+         ;; Make sure results can be used in defs
+         (filter #(not (.contains % " ")))
          (filter #(not (string/starts-with? % "."))))))
 
 (defn resolve-tmp "Resolves rel against tmp." [rel] (resolve-as tmp-dir rel))
