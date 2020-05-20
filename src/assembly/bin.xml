@@ -1,0 +1,33 @@
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.1.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.1.0 http://maven.apache.org/xsd/assembly-2.1.0.xsd">
+    <formats>
+        <!--  Only generate a ZIP archive  -->
+        <format>zip</format>
+    </formats>
+    <fileSets>
+        <!--  Copy README from root into archive root  -->
+        <fileSet>
+            <includes>
+                <include>README*</include>
+            </includes>
+        </fileSet>
+        <!--  Copy app jar from target/ into archive root  -->
+        <fileSet>
+            <directory>target/</directory>
+            <outputDirectory/>
+            <includes>
+                <include>osgeyes*.jar</include>
+            </includes>
+        </fileSet>
+        <!--  Copy all .edn and .clj files from src/dist/ into archive root  -->
+        <fileSet>
+            <directory>src/dist</directory>
+            <outputDirectory/>
+            <includes>
+                <include>*.edn</include>
+                <include>*.clj</include>
+            </includes>
+        </fileSet>
+    </fileSets>
+</assembly>

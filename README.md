@@ -19,14 +19,14 @@ java -jar osgeyes-dist-VERSION/osgeyes-VERSION.jar
 Once the CLI has loaded, run the following two commands first. Don't forget to adjust for 
 path differences if necessary.
 ```
-(index-load "osgeyes-dist-VERSION/index.edn")
+(index-load "osgeyes-dist-VERSION/index-ddf_2_19_5.edn")
 (load-file "osgeyes-dist-VERSION/selections.clj")
 ```
 
 #### When the graph index needs to be built manually
 
 If you will be scanning new repositories to generate their dependency graphs instead of only
-leveraging the provided `index.edn` file, first ensure that all cloned repositories (DDF, Alliance,
+leveraging the provided index EDN file, first ensure that all cloned repositories (DDF, Alliance,
 etc.) are in the same parent directory. Then verify either one of the following:
 1. You ran `java -jar APP` from where your cloned repositories live; if DDF lives in `~/repos/ddf/`
 then ensure your working directory is `~/repos/` before you start the app.
@@ -132,8 +132,8 @@ names are prefixed with `only-` by convention.
 ```
 
 As long as the final result can be smashed down to a single vector with even size and proper 
-criteria-regex alternating semantics, it'll work. Note that **you'll need to call 
-`(load-file "osgeyes-dist-VERSION/selections.clj")` again to see changes take effect**.
+criteria-regex alternating semantics, it'll work. Note that **you'll need to call** 
+`(load-file "osgeyes-dist-VERSION/selections.clj")` **again to see changes take effect**.
 
 #### Supported criteria
 

@@ -6,14 +6,20 @@
     <packaging>clojure</packaging>
 
     <properties>
+        <!--  Maven  -->
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!--  Maven Plugins  -->
+        <maven.clojure.version>1.8.4</maven.clojure.version>
+        <maven.assembly.version>2.2-beta-5</maven.assembly.version>
+        <!--  Clojure  -->
         <clojure.lang.version>1.10.1</clojure.lang.version>
         <clojure.data.json.version>0.2.7</clojure.data.json.version>
+        <!--  Primary Dependencies  -->
         <reply.version>0.4.4</reply.version>
         <loom.version>1.0.2</loom.version>
-        <felix.version>1.11.4</felix.version>
+        <dorothy.version>0.0.7</dorothy.version>
     </properties>
 
     <repositories>
@@ -60,7 +66,7 @@
         <dependency>
             <groupId>dorothy</groupId>
             <artifactId>dorothy</artifactId>
-            <version>0.0.7</version>
+            <version>${dorothy.version}</version>
         </dependency>
     </dependencies>
 
@@ -73,7 +79,7 @@
             <plugin>
                 <groupId>com.theoryinpractise</groupId>
                 <artifactId>clojure-maven-plugin</artifactId>
-                <version>1.8.4</version>
+                <version>${maven.clojure.version}</version>
                 <extensions>true</extensions>
                 <configuration>
                     <!--
@@ -103,13 +109,16 @@
                 </configuration>
             </plugin>
             <!--
-            Create the distribution by pointing to the generated class. 
+            Create the fat jar by pointing to the generated class and create the distribution
+            by zipping everything together.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
+                <version>${maven.assembly.version}</version>
                 <executions>
                     <execution>
+                        <id>make-jar</id>
                         <phase>package</phase>
                         <goals>
                             <goal>single</goal>
@@ -124,6 +133,18 @@
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>
                             <finalName>osgeyes-${project.version}</finalName>
+                            <appendAssemblyId>false</appendAssemblyId>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>make-zip</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <descriptor>src/assembly/bin.xml</descriptor>
+                            <finalName>osgeyes-dist-${project.version}</finalName>
                             <appendAssemblyId>false</appendAssemblyId>
                         </configuration>
                     </execution>
