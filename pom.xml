@@ -12,7 +12,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!--  Maven Plugins  -->
         <maven.clojure.version>1.8.4</maven.clojure.version>
-        <maven.assembly.version>2.2-beta-5</maven.assembly.version>
+        <maven.assembly.version>3.3.0</maven.assembly.version>
         <!--  Clojure  -->
         <clojure.lang.version>1.10.1</clojure.lang.version>
         <clojure.data.json.version>0.2.7</clojure.data.json.version>
@@ -143,7 +143,9 @@
                             <goal>single</goal>
                         </goals>
                         <configuration>
-                            <descriptor>src/assembly/bin.xml</descriptor>
+                            <descriptors>
+                                <descriptor>src/assembly/bin.xml</descriptor>
+                            </descriptors>
                             <finalName>osgeyes-dist-${project.version}</finalName>
                             <appendAssemblyId>false</appendAssemblyId>
                         </configuration>
