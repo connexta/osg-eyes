@@ -1,4 +1,7 @@
 # OSG-Eyes
+
+![Build](https://github.com/connexta/osg-eyes/workflows/Java%20CI%20with%20Maven/badge.svg)
+
 A CLI toolkit for working with dependency data.
 
 ![OSG-Eyes_Banner](banner.png)

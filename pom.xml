@@ -13,6 +13,7 @@
         <!--  Maven Plugins  -->
         <maven.clojure.version>1.8.4</maven.clojure.version>
         <maven.assembly.version>3.3.0</maven.assembly.version>
+        <maven.release.version>2.5.3</maven.release.version>
         <!--  Clojure  -->
         <clojure.lang.version>1.10.1</clojure.lang.version>
         <clojure.data.json.version>1.0.0</clojure.data.json.version>
@@ -21,6 +22,11 @@
         <loom.version>1.0.2</loom.version>
         <dorothy.version>0.0.7</dorothy.version>
     </properties>
+
+    <scm>
+        <url>https://github.com/connexta/osg-eyes</url>
+        <developerConnection>scm:git:git@github.com:connexta/osg-eyes.git</developerConnection>
+    </scm>
 
     <repositories>
         <repository>
@@ -72,6 +78,17 @@
 
     <build>
         <plugins>
+            <!--
+            Some sensible defaults for releases.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <version>${maven.release.version}</version>
+                <configuration>
+                    <tagNameFormat>v@{project.version}</tagNameFormat>
+                </configuration>
+            </plugin>
             <!--
             The raw Clojure source is getting shipped as-is. A compile-for-production profile can
             be introduced later to improve startup time.
