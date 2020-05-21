@@ -15,7 +15,7 @@
         <maven.assembly.version>3.3.0</maven.assembly.version>
         <!--  Clojure  -->
         <clojure.lang.version>1.10.1</clojure.lang.version>
-        <clojure.data.json.version>0.2.7</clojure.data.json.version>
+        <clojure.data.json.version>1.0.0</clojure.data.json.version>
         <!--  Primary Dependencies  -->
         <reply.version>0.4.4</reply.version>
         <loom.version>1.0.2</loom.version>
