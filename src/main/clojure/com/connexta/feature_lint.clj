@@ -18,10 +18,12 @@
                (str repos-root "/"))
         ;; Make this OS agnostic later
         repo (if (str/starts-with? rel-path "/")
-               (throw (IllegalArgumentException.
-                        (str "Path is absolute but should be relative: " rel-path)))
-               rel-path)]
-    (str root repo)))
+               rel-path ;; fine - just use abs path
+               #_(throw (IllegalArgumentException.
+                          (str "Path is absolute but should be relative: " rel-path)))
+               (str root rel-path))]
+    repo
+    #_(str root repo)))
 
 (def feature-xml-header-attrs
   {:xsi:schemaLocation "http://karaf.apache.org/xmlns/features/v1.3.0 http://karaf.apache.org/xmlns/features/v1.3.0"
@@ -317,6 +319,111 @@
        flatten-feature
        layered-feature->xml
        (xml-write "/cx/deploy/ddf-2.19.4/features-flat.xml")))
+
+(defn as-flattened [file feature]
+  (->> file
+       resolve-repo
+       xml-parse
+       (xml->layered-feature feature)
+       flatten-feature
+       :children
+       sort))
+
+(defn cannot-contain-text [text coll]
+  (filter #(false? (.contains % text)) coll))
+
+(def path-to-pax-web-features
+  "/Users/lambeaux/.m2/repository/org/ops4j/pax/web/pax-web-features/7.2.11/pax-web-features-7.2.11-features.xml")
+
+(comment
+
+  (let [catalog-set
+        (as-flattened "features.xml" "profile-catalog")
+        container-set
+        (->> [(as-flattened path-to-pax-web-features "pax-jetty")
+              (as-flattened "features_karaf.xml" "standard")]
+             flatten
+             (apply sorted-set))]
+    (filter #(false? (contains? container-set %)) catalog-set))
+
+
+  (let [security-set (as-flattened "features_security.xml" "security-web-sso-defaults")]
+    (->> security-set
+         (filter #(.startsWith % "mvn:ddf."))))
+
+  ;;  "mvn:org.ow2.asm/asm/5.2"
+  ;;  "mvn:org.ow2.asm/asm/7.1"
+  (let [catalog-set (as-flattened "features.xml" "profile-catalog")]
+    (->> catalog-set
+         ;; Filter by groupId so we can revisit later if we're missing something
+         ;; ---
+         (cannot-contain-text "mvn:org.codice.thirdparty")
+         (cannot-contain-text "mvn:ddf.action")
+         (cannot-contain-text "mvn:ddf.lib")
+         (cannot-contain-text "mvn:ddf.measure")
+         (cannot-contain-text "mvn:ddf.mime")
+         (cannot-contain-text "mvn:ddf.platform")
+         (cannot-contain-text "mvn:ddf.security")
+         (cannot-contain-text "mvn:ddf.catalog")
+         (cannot-contain-text "mvn:org.codice.ddf")
+         (cannot-contain-text "mvn:org.codice.ddf.spatial")
+         ;; Karaf - major transitive dependency provider
+         (cannot-contain-text "org.apache.karaf")
+         ;; ---
+         (cannot-contain-text "org.apache.servicemix.bundles.spring-")
+         (cannot-contain-text "org.ow2.asm")
+         (cannot-contain-text "org.apache.aries.blueprint")
+         (cannot-contain-text "org.apache.aries") ;; MAYBE OKAY ???
+         (cannot-contain-text "org.eclipse.jetty")
+         (cannot-contain-text "org.jline")
+         (cannot-contain-text "org.fusesource.jansi")
+         ;; Pax - part of Karaf
+         (cannot-contain-text "org.ops4j.pax.web")
+         (cannot-contain-text "org.ops4j.pax.url")
+         (cannot-contain-text "org.apache.xbean")
+
+         ;; CXF - major transitive dependency provider
+         (cannot-contain-text "org.apache.cxf")
+         ;; ---
+         (cannot-contain-text "org.apache.wss4j")
+         (cannot-contain-text "org.apache.servicemix.specs")
+         (cannot-contain-text "org.apache.abdera")
+         (cannot-contain-text "mvn:commons-") ;; MAYBE OKAY ???
+         (cannot-contain-text "org.codehaus.woodstox")
+         (cannot-contain-text "org.codehaus.jettison")
+
+         ;; Common libs
+         (cannot-contain-text "net.jodah")
+         (cannot-contain-text "com.google.guava")
+         (cannot-contain-text "ch.qos.cal10n")
+         (cannot-contain-text "org.slf4j")))
+
+
+  ;; Ask people about this later
+  ;; "mvn:org.apache.karaf.http/org.apache.karaf.http.core/4.2.6"
+  ;; "mvn:org.apache.karaf.services/org.apache.karaf.services.eventadmin/4.2.6"
+  ;; "mvn:org.apache.karaf.jaas/org.apache.karaf.jaas.jasypt/4.2.6"
+  ;; "mvn:org.apache.karaf.web/org.apache.karaf.web.core/4.2.6"
+  (frequencies
+    (flatten
+      [(filter #(.contains % "karaf") (as-flattened "features.xml" "profile-catalog"))
+       (filter #(.contains % "karaf") (as-flattened "features_karaf.xml" "standard"))]))
+
+
+  (filter #(.contains % "pax") (as-flattened "features.xml" "profile-catalog"))
+  (filter #(.contains % "servicemix.bundles") (as-flattened "features_karaf.xml" "standard"))
+  (as-flattened "features_karaf.xml" "war")
+
+
+  (as-flattened path-to-pax-web-features "pax-jetty")
+  (as-flattened "features_karaf.xml" "standard")
+  (as-flattened "features.xml" "profile-catalog")
+  #_(as-flattened "features.xml" "profile-standard")
+
+
+  (count (as-flattened "features_karaf.xml" "standard"))
+  (count (as-flattened "features.xml" "profile-catalog"))
+  (count (as-flattened "features.xml" "profile-standard")))
 
 (comment
   "Flattens the 'profile-standard' feature and prints the list as Clojure."
