@@ -55,6 +55,19 @@
             <version>${clojure.data.json.version}</version>
         </dependency>
         <!--
+        Extras stuff.
+        -->
+        <dependency>
+            <groupId>org.clojure</groupId>
+            <artifactId>tools.trace</artifactId>
+            <version>0.7.10</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jfree</groupId>
+            <artifactId>jfreechart</artifactId>
+            <version>1.5.0</version>
+        </dependency>
+        <!--
         Instead of writing a CLI app from scratch, run the app as a customized Clojure REPL
         with tooling functions preloaded.
         -->
