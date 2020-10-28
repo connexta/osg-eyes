@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>osg-eyes</artifactId>
+        <groupId>com.connexta.osgeyes</groupId>
+        <version>0.2-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>deps-draw-graph</artifactId>
+    <packaging>clojure</packaging>
+
+    <name>OSG-Eyes :: Deps :: Draw Graph</name>
+
+    <dependencies>
+        <!--
+        Clojure language & JSON support; if this repo is only ever distributed as a CLI app, see if
+        the compiler can be omitted from the dist.
+        -->
+        <dependency>
+            <groupId>org.clojure</groupId>
+            <artifactId>clojure</artifactId>
+            <version>${clojure.lang.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.clojure</groupId>
+            <artifactId>data.json</artifactId>
+            <version>${clojure.data.json.version}</version>
+        </dependency>
+        <!--
+        Instead of writing a CLI app from scratch, run the app as a customized Clojure REPL
+        with tooling functions preloaded.
+        -->
+        <dependency>
+            <groupId>reply</groupId>
+            <artifactId>reply</artifactId>
+            <version>${reply.version}</version>
+        </dependency>
+        <!--
+        Loom is the graph library of choice. Dorothy is for drawing GraphViz graphs using a local
+        native executable that will likely be removed in favor of the vis.js library.
+        -->
+        <dependency>
+            <groupId>aysylu</groupId>
+            <artifactId>loom</artifactId>
+            <version>${loom.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dorothy</groupId>
+            <artifactId>dorothy</artifactId>
+            <version>${dorothy.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+            The raw Clojure source is getting shipped as-is. A compile-for-production profile can
+            be introduced later to improve startup time.
+            -->
+            <plugin>
+                <groupId>com.theoryinpractise</groupId>
+                <artifactId>clojure-maven-plugin</artifactId>
+                <version>${maven.clojure.version}</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <!--
+                    Mark source directories appropriately for proper IDE integration.
+                    -->
+                    <sourceDirectories>
+                        <sourceDirectory>src/main/clojure</sourceDirectory>
+                    </sourceDirectories>
+                    <testSourceDirectories>
+                        <testSourceDirectory>src/test/clojure</testSourceDirectory>
+                    </testSourceDirectories>
+                    <!--
+                    Do not AOT main; since we're wrapping REPLy & nREPL, using Clojure as the entry
+                    point marked with gen-class will result in compiling all transitive Clojure
+                    dependencies, which takes a lot of time).
+                    -->
+                    <compileDeclaredNamespaceOnly>true</compileDeclaredNamespaceOnly>
+                    <namespaces>
+                        <namespace>com.connexta.osgeyes.*</namespace>
+                        <namespace>!com.connexta.osgeyes.main</namespace>
+                    </namespaces>
+                    <!--
+                    Take advantage of compiler syntax checking without actually packaging
+                    AOT classes.
+                    -->
+                    <temporaryOutputDirectory>true</temporaryOutputDirectory>
+                </configuration>
+            </plugin>
+            <!--
+            Create the fat jar by pointing to the generated class and create the distribution
+            by zipping everything together.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>${maven.assembly.version}</version>
+                <executions>
+                    <execution>
+                        <id>make-jar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <archive>
+                                <manifest>
+                                    <mainClass>com.connexta.osgeyes.OsgeyesMain</mainClass>
+                                </manifest>
+                            </archive>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                            <finalName>osgeyes-cli-${project.version}</finalName>
+                            <appendAssemblyId>false</appendAssemblyId>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>make-zip</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <descriptors>
+                                <descriptor>src/assembly/bin.xml</descriptor>
+                            </descriptors>
+                            <finalName>osgeyes-cli-${project.version}</finalName>
+                            <appendAssemblyId>false</appendAssemblyId>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
