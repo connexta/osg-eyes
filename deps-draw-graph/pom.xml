@@ -13,6 +13,14 @@
 
     <name>OSG-Eyes :: Deps :: Draw Graph</name>
 
+    <repositories>
+        <repository>
+            <id>clojars.org</id>
+            <name>Clojars Repository</name>
+            <url>https://repo.clojars.org</url>
+        </repository>
+    </repositories>
+
     <dependencies>
         <!--
         Clojure language & JSON support; if this repo is only ever distributed as a CLI app, see if

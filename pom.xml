@@ -18,6 +18,8 @@
         <maven.clojure.version>1.8.4</maven.clojure.version>
         <maven.assembly.version>3.3.0</maven.assembly.version>
         <maven.release.version>2.5.3</maven.release.version>
+        <!--  Java  -->
+        <junit.version>4.12</junit.version>
         <!--  Clojure  -->
         <clojure.lang.version>1.10.1</clojure.lang.version>
         <clojure.data.json.version>1.0.0</clojure.data.json.version>
@@ -29,6 +31,7 @@
 
     <modules>
         <module>deps-draw-graph</module>
+        <module>deps-mvn-indexing</module>
     </modules>
 
     <scm>
@@ -37,13 +40,14 @@
         <tag>HEAD</tag>
     </scm>
 
-    <repositories>
-        <repository>
-            <id>clojars.org</id>
-            <name>Clojars Repository</name>
-            <url>https://repo.clojars.org</url>
-        </repository>
-    </repositories>
+    <dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
     <build>
         <plugins>
