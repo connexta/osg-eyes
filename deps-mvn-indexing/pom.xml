@@ -20,19 +20,19 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>org.apache.maven.indexer</groupId>
-			<artifactId>indexer-core</artifactId>
-			<version>6.0.0</version>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.maven.wagon</groupId>
-			<artifactId>wagon-http-lightweight</artifactId>
-			<version>3.2.0</version>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-simple</artifactId>
+			<version>1.7.25</version>
 		</dependency>
 		<dependency>
 			<groupId>org.eclipse.sisu</groupId>
 			<artifactId>org.eclipse.sisu.plexus</artifactId>
 			<version>0.3.4</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.maven.indexer</groupId>
+			<artifactId>indexer-core</artifactId>
+			<version>6.0.0</version>
 		</dependency>
 	</dependencies>
 
