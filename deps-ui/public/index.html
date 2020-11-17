@@ -30,14 +30,21 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <!--
-      modifications for clojure repl
+      React app
+
+      This HTML file is a template.
+      If you open it directly in the browser, you will see an empty page.
+
+      You can add webfonts, meta tags, or analytics to this file.
+      The build step will place the bundled scripts into the <body> tag.
+
+      To begin the development, run `npm start` or `yarn start`.
+      To create a production bundle, use `npm run build` or `yarn build`.
     -->
-    <div class="paren-soup">
-      <!-- <div class="instarepl"></div> -->
-      <!-- <div class="numbers"></div> -->
-      <div class="content" contenteditable="true"></div>
-      <!-- <div class="content" contenteditable="true">(+ 1 1) ; put initial code here</div> -->
-    </div>
+    <div id="root"></div>
+    <!--
+      Clojure repl JS
+    -->
     <script type="text/javascript" src="%PUBLIC_URL%/paren-soup.js"></script>
     <!-- <script type="text/javascript">paren_soup.core.init_all();</script> -->
     <script type="text/javascript">
@@ -65,18 +72,16 @@
       paren_soup.core.append_text(editor, "=> ");
     </script>
     <!--
-      end of modifications
+      Clojure repl
     -->
-    <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
+    <div class="paren-soup">
+      <!-- <div class="instarepl"></div> -->
+      <!-- <div class="numbers"></div> -->
 
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
+      <!-- Getting rid of below line helped XTerm to start working -->
+      <!-- <div class="content" contenteditable="true"></div> -->
+      
+      <!-- <div class="content" contenteditable="true">(+ 1 1) ; put initial code here</div> -->
+    </div>
   </body>
 </html>
