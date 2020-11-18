@@ -9,7 +9,7 @@
       name="description"
       content="Web site created using create-react-app"
     />
-    <link rel="stylesheet" type="text/css" href="%PUBLIC_URL%/paren-soup-dark.css">
+    <link rel="stylesheet" type="text/css" href="%PUBLIC_URL%/paren-soup-light.css">
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a
@@ -30,6 +30,56 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <!--
+      Clojure repl JS
+    -->
+    <script type="text/javascript" src="%PUBLIC_URL%/paren-soup.js"></script>
+    <!-- <script type="text/javascript">paren_soup.core.init_all();</script> -->
+    <script type="text/javascript">
+      //alert(window.onload)
+      window.addEventListener('load', (event) => {
+        console.log('Handler fired')
+        var parent = document.getElementById('clojure-parent');
+        var content = document.getElementById('clojure-content');
+        var editor = paren_soup.core.init(parent, {
+          "change-callback": function(e) {
+              if (e.type == "keyup") {
+                  content.scrollTop = content.scrollHeight;
+              }
+          },
+          "console-callback": function(text) {
+              paren_soup.core.eval(editor, text, function(result) {
+                  // result will either be a string or an array of strings.
+                  // if it's an array of strings, the first item in it is an error message
+                  if (result instanceof Array) {
+                    result = "Error: " + result[0];
+                  }
+                  paren_soup.core.append_text(editor, result + "\n");
+                  paren_soup.core.append_text(editor, "=> ");
+                  content.scrollTop = content.scrollHeight;
+              });
+          }
+        });
+        paren_soup.core.append_text(editor, "=> ");
+        window.clojure = {
+          eval: (text, callback) => {
+            paren_soup.core.eval(editor, text, callback);
+          }
+        }
+      });
+    </script>
+    <!--
+      Clojure repl
+    -->
+    <div id="clojure-parent" class="paren-soup" style="display: none;">
+      <!-- <div class="instarepl"></div> -->
+      <!-- <div class="numbers"></div> -->
+
+      <!-- Getting rid of below line helped XTerm to start working -->
+      <div id="clojure-content" class="content" contenteditable="true"></div>
+
+      <!-- <div class="content" contenteditable="true">(+ 1 1) ; put initial code here</div> -->
+    </div>
+    <!--
       React app
 
       This HTML file is a template.
@@ -42,46 +92,5 @@
       To create a production bundle, use `npm run build` or `yarn build`.
     -->
     <div id="root"></div>
-    <!--
-      Clojure repl JS
-    -->
-    <script type="text/javascript" src="%PUBLIC_URL%/paren-soup.js"></script>
-    <!-- <script type="text/javascript">paren_soup.core.init_all();</script> -->
-    <script type="text/javascript">
-      var parent = document.querySelector('.paren-soup');
-      var content = document.querySelector('.content');
-      var editor = paren_soup.core.init(parent, {
-        "change-callback": function(e) {
-            if (e.type == "keyup") {
-                content.scrollTop = content.scrollHeight;
-            }
-        },
-        "console-callback": function(text) {
-            paren_soup.core.eval(editor, text, function(result) {
-                // result will either be a string or an array of strings.
-                // if it's an array of strings, the first item in it is an error message
-                if (result instanceof Array) {
-                  result = "Error: " + result[0];
-                }
-                paren_soup.core.append_text(editor, result + "\n");
-                paren_soup.core.append_text(editor, "=> ");
-                content.scrollTop = content.scrollHeight;
-            });
-        }
-      });
-      paren_soup.core.append_text(editor, "=> ");
-    </script>
-    <!--
-      Clojure repl
-    -->
-    <div class="paren-soup">
-      <!-- <div class="instarepl"></div> -->
-      <!-- <div class="numbers"></div> -->
-
-      <!-- Getting rid of below line helped XTerm to start working -->
-      <!-- <div class="content" contenteditable="true"></div> -->
-      
-      <!-- <div class="content" contenteditable="true">(+ 1 1) ; put initial code here</div> -->
-    </div>
   </body>
 </html>
