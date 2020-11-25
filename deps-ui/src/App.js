@@ -1,4 +1,5 @@
 import * as React from 'react'
+import Graph from 'react-graph-vis'
 import { ReactTerminalStateless, ReactThemes } from 'react-terminal-component';
 import {Emulator, EmulatorState} from 'javascript-terminal'
 import Immutable from 'immutable'
@@ -96,6 +97,33 @@ class App extends React.Component {
   }
 
   render() {
+    const graph = {
+      nodes: [
+        { id: 1, label: "Node 1", color: "#e04141" },
+        { id: 2, label: "Node 2", color: "#e09c41" },
+        { id: 3, label: "Node 3", color: "#e0df41" },
+        { id: 4, label: "Node 4", color: "#7be041" },
+        { id: 5, label: "Node 5", color: "#41e0c9" }
+      ],
+      edges: [{ id: '1v', from: 1, to: 2 }, { id: '2v', from: 1, to: 3 }, { id: '3v', from: 2, to: 4 }, { id: '4v', from: 2, to: 5 }]
+    }
+    const options = {
+      layout: {
+        hierarchical: false
+      },
+      edges: {
+        color: "#000000"
+      }
+    }
+    const events = {
+      select: function(event) {
+        var { nodes, edges } = event;
+        console.log("Selected nodes:");
+        console.log(nodes);
+        console.log("Selected edges:");
+        console.log(edges);
+      }
+    }
     return (
       <div>
         <div className="Terminal">
@@ -109,12 +137,15 @@ class App extends React.Component {
             onInputChange={this._onInputChange}
             onStateChange={this._onStateChange}
             // Config  
-            theme={ReactThemes.light} 
+            theme={ReactThemes.ember} 
             autoFocus={false} 
             clickToFocus={true} />
         </div>
         <div className="App">
-          <header className="App-header">
+          <div className="Viewer">
+            <Graph key="graph" graph={graph} options={options} events={events} style={{ height: "100vh"}} />
+          </div>
+          {/* <header className="App-header">
             <img src={logo} className="App-logo" alt="logo" />
             <p>
               Edit <code>src/App.js</code> and save to reload the page.
@@ -122,7 +153,7 @@ class App extends React.Component {
             <a className="App-link" href="https://reactjs.org" target="_blank" rel="noopener noreferrer">
               Learn React
             </a>
-          </header>
+          </header> */}
         </div>
       </div>
     );
