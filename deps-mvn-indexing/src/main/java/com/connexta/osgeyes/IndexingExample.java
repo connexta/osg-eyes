@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -84,6 +85,8 @@ public class IndexingExample implements Callable<Void>, Closeable {
 
   private final BufferedReader consoleIn;
 
+  private final Criteria criteria;
+
   public static void main(String[] args) throws Exception {
     try (final IndexingExample app = new IndexingExample()) {
       app.call();
@@ -106,6 +109,8 @@ public class IndexingExample implements Callable<Void>, Closeable {
     this.indexerEngine = plexusContainer.lookup(IndexerEngine.class);
     this.repositoryScanner = plexusContainer.lookup(Scanner.class);
     this.consoleIn = new BufferedReader(new InputStreamReader(System.in));
+
+    this.criteria = new Criteria(indexer);
 
     plexusContainer.addComponent(
         new MvnHierarchyIndexCreator(), IndexCreator.class, MvnHierarchyIndexCreator.ID);
@@ -194,28 +199,51 @@ public class IndexingExample implements Callable<Void>, Closeable {
       // listAllArtifacts(indexingContext);
       // waitForUserToContinue();
 
-      search(
-          indexingContext,
-          VersionRangeFilter.atMinimum("2.19.0").butStrictlyLessThan("2.20.0"),
-          Criteria.of(MAVEN.GROUP_ID, "ddf"),
-          Criteria.of(MAVEN.ARTIFACT_ID, "ddf"),
-          Criteria.of(MAVEN.PACKAGING, "pom"));
-      waitForUserToContinue();
+      //      search(
+      //          indexingContext,
+      //          VersionRangeFilter.atMinimum("2.19.0").butStrictlyLessThan("2.20.0"),
+      //          Criteria.of(MAVEN.GROUP_ID, "ddf"),
+      //          Criteria.of(MAVEN.ARTIFACT_ID, "ddf"),
+      //          Criteria.of(MAVEN.PACKAGING, "pom"));
+      //      waitForUserToContinue();
+      //
+      //      search(
+      //          indexingContext,
+      //          Criteria.of(MAVEN.GROUP_ID, "ddf"),
+      //          Criteria.of(MAVEN.ARTIFACT_ID, "ddf"),
+      //          Criteria.of(MAVEN.PACKAGING, "pom"),
+      //          Criteria.of(MAVEN.VERSION, "2.19.5"));
+      //      waitForUserToContinue();
 
-      search(
-          indexingContext,
-          Criteria.of(MAVEN.GROUP_ID, "ddf"),
-          Criteria.of(MAVEN.ARTIFACT_ID, "ddf"),
-          Criteria.of(MAVEN.PACKAGING, "pom"),
-          Criteria.of(MAVEN.VERSION, "2.19.5"));
-      waitForUserToContinue();
+      QueryCriteria packagingIsPomOrBundle =
+          criteria.of(
+              criteria.of(MAVEN.PACKAGING, "pom", criteria.options().with(Occur.SHOULD)),
+              criteria.of(MAVEN.PACKAGING, "bundle", criteria.options().with(Occur.SHOULD)));
 
       search(
           indexingContext,
           // Criteria.of(MAVEN.VERSION, "2.19.5"),
           // Criteria.of(MvnOntology.POM_MODULES, "catalog"),
-          Criteria.of(MAVEN.ARTIFACT_ID, "catalog"),
-          Criteria.of(MvnOntology.POM_PARENT, "mvn:ddf/ddf/2.19.5"));
+          criteria.of(
+              criteria.of(MAVEN.ARTIFACT_ID, "catalog"),
+              criteria.of(MvnOntology.POM_PARENT, "mvn:ddf/ddf/2.19.5"),
+              packagingIsPomOrBundle));
+      waitForUserToContinue();
+
+      search(
+          indexingContext,
+          criteria.of(
+              criteria.of(MAVEN.ARTIFACT_ID, "transformer"),
+              criteria.of(MvnOntology.POM_PARENT, "mvn:ddf.catalog/catalog/2.19.5"),
+              packagingIsPomOrBundle));
+      waitForUserToContinue();
+
+      search(
+          indexingContext,
+          criteria.of(
+              criteria.of(MAVEN.ARTIFACT_ID, "catalog-transformer-html"),
+              criteria.of(MvnOntology.POM_PARENT, "mvn:ddf.catalog.transformer/transformer/2.19.5"),
+              packagingIsPomOrBundle));
       waitForUserToContinue();
 
       // OSGI Attributes are using an unsupported indexing model
@@ -244,8 +272,9 @@ public class IndexingExample implements Callable<Void>, Closeable {
     searchGrouped(
         indexingContext,
         new GAGrouping(),
-        Criteria.of(MAVEN.GROUP_ID, "org.apache.maven.plugins"),
-        Criteria.of(MAVEN.PACKAGING, "maven-plugin"));
+        criteria.of(
+            criteria.of(MAVEN.GROUP_ID, "org.apache.maven.plugins"),
+            criteria.of(MAVEN.PACKAGING, "maven-plugin")));
     waitForUserToContinue();
   }
 
@@ -263,40 +292,47 @@ public class IndexingExample implements Callable<Void>, Closeable {
 
     search(
         indexingContext,
-        Criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
-        Criteria.of(MAVEN.ARTIFACT_ID, "guava"),
-        Criteria.of(MAVEN.PACKAGING, "bundle"),
-        Criteria.of(MAVEN.CLASSIFIER, "*").with(Occur.MUST_NOT));
+        criteria.of(
+            criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
+            criteria.of(MAVEN.ARTIFACT_ID, "guava"),
+            criteria.of(MAVEN.PACKAGING, "bundle"),
+            criteria.of(MAVEN.CLASSIFIER, "*", criteria.options().with(Occur.MUST_NOT))));
 
     search(
         indexingContext,
-        Criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
-        Criteria.of(MAVEN.ARTIFACT_ID, "guava"),
-        Criteria.of(MAVEN.PACKAGING, "bundle"),
-        Criteria.of(MAVEN.CLASSIFIER, "*").with(Occur.MUST_NOT));
+        criteria.of(
+            criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
+            criteria.of(MAVEN.ARTIFACT_ID, "guava"),
+            criteria.of(MAVEN.PACKAGING, "bundle"),
+            criteria.of(MAVEN.CLASSIFIER, "*", criteria.options().with(Occur.MUST_NOT))));
 
     // Expected: [20.0, 27.0.1]
     search(
         indexingContext,
         VersionRangeFilter.atMinimum("20.0"),
-        Criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
-        Criteria.of(MAVEN.ARTIFACT_ID, "guava"));
+        criteria.of(
+            criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
+            criteria.of(MAVEN.ARTIFACT_ID, "guava")));
 
     // Expected: [14.0.1, 19.0]
     search(
         indexingContext,
         VersionRangeFilter.atMinimum("14.0").butStrictlyLessThan("20.0"),
-        Criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
-        Criteria.of(MAVEN.ARTIFACT_ID, "guava"));
+        criteria.of(
+            criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
+            criteria.of(MAVEN.ARTIFACT_ID, "guava")));
 
     // Expected: [19.0, 20.0]
     search(
         indexingContext,
         VersionRangeFilter.atMaximum("20.0").butStrictlyGreaterThan("14.0.1"),
-        Criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
-        Criteria.of(MAVEN.ARTIFACT_ID, "guava"));
+        criteria.of(
+            criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
+            criteria.of(MAVEN.ARTIFACT_ID, "guava")));
 
-    search(indexingContext, Criteria.of(MAVEN.SHA1, "89507701249388").partialInput());
+    search(
+        indexingContext,
+        criteria.of(MAVEN.SHA1, "89507701249388", criteria.options().partialInput()));
 
     waitForUserToContinue();
   }
@@ -388,10 +424,10 @@ public class IndexingExample implements Callable<Void>, Closeable {
   }
 
   private void search(
-      IndexingContext indexingContext, ArtifactInfoFilter filter, Criteria... criteria)
+      IndexingContext indexingContext, ArtifactInfoFilter filter, QueryCriteria criteria)
       throws IOException {
-    final Query query = getQuery(criteria);
-    logline("Searching for " + criteriaToString(criteria));
+    final Query query = criteria.getQuery();
+    logline("Searching for " + criteria.toString());
 
     final IteratorSearchResponse response =
         indexer.searchIterator(
@@ -407,10 +443,13 @@ public class IndexingExample implements Callable<Void>, Closeable {
     logline();
   }
 
-  private void search(IndexingContext indexingContext, Criteria... criteria) throws IOException {
-    final Query query = getQuery(criteria);
-    logline("Searching for " + criteriaToString(criteria));
+  private void search(IndexingContext indexingContext, QueryCriteria criteria) throws IOException {
+    final Query query = criteria.getQuery();
+    logline("Searching for " + criteria.toString());
+    search(indexingContext, query);
+  }
 
+  private void search(IndexingContext indexingContext, Query query) throws IOException {
     final FlatSearchResponse response =
         indexer.searchFlat(new FlatSearchRequest(query, indexingContext));
 
@@ -425,10 +464,11 @@ public class IndexingExample implements Callable<Void>, Closeable {
   }
 
   private void searchGrouped(
-      IndexingContext indexingContext, Grouping grouping, Criteria... criteria) throws IOException {
+      IndexingContext indexingContext, Grouping grouping, QueryCriteria criteria)
+      throws IOException {
     final int maxArtifactDescriptionStringWidth = 60;
-    final Query query = getQuery(criteria);
-    logline("Searching (grouped) for " + criteriaToString(criteria));
+    final Query query = criteria.getQuery();
+    logline("Searching (grouped) for " + criteria.toString());
 
     final GroupedSearchResponse response =
         indexer.searchGrouped(new GroupedSearchRequest(query, grouping, indexingContext));
@@ -451,61 +491,128 @@ public class IndexingExample implements Callable<Void>, Closeable {
     logline();
   }
 
-  private Query getQuery(Criteria... criteria) {
-    final List<Criteria> criteriaList = Arrays.asList(criteria);
-    if (criteriaList.isEmpty()) {
-      throw new IllegalArgumentException("No search criteria specified");
-    }
-
-    if (criteriaList.size() == 1) {
-      final Criteria c = criteriaList.get(0);
-      return criteriaToQuery(c);
-    }
-
-    final BooleanQuery.Builder queryBuilder = new BooleanQuery.Builder();
-    criteriaList.forEach(c -> queryBuilder.add(criteriaToQuery(c), c.occurrancePolicy));
-    return queryBuilder.build();
-  }
-
-  private Query criteriaToQuery(Criteria c) {
-    return indexer.constructQuery(
-        c.field,
-        c.exact ? new SourcedSearchExpression(c.value) : new UserInputSearchExpression(c.value));
-  }
-
-  private String criteriaToString(Criteria... criteria) {
-    return "["
-        + Arrays.stream(criteria).map(Criteria::toString).collect(Collectors.joining(", "))
-        + "]";
-  }
-
   private static class Criteria {
+
+    private final CriteriaOptions options;
+
+    // Goal is to eventually remove this as an inverted dependency
+    private final Indexer indexer;
+
+    public Criteria(Indexer indexer) {
+      this(new CriteriaOptions(), indexer);
+    }
+
+    public Criteria(CriteriaOptions options, Indexer indexer) {
+      this.options = Objects.requireNonNull(options, "options cannot be null");
+      this.indexer = Objects.requireNonNull(indexer, "indexer cannot be null");
+    }
+
+    public CriteriaOptions getOptions() {
+      return options;
+    }
+
+    public Indexer getIndexer() {
+      return indexer;
+    }
+
+    public QueryCriteria of(Field field, String value) {
+      return new KeyValueCriteria(field, value, new CriteriaOptions(), indexer);
+    }
+
+    public QueryCriteria of(Field field, String value, CriteriaOptions options) {
+      return new KeyValueCriteria(field, value, options, indexer);
+    }
+
+    public QueryCriteria of(QueryCriteria... criteria) {
+      return new CompoundCriteria(Arrays.asList(criteria), indexer);
+    }
+
+    public CriteriaOptions options() {
+      return new CriteriaOptions();
+    }
+  }
+
+  private static class CriteriaOptions {
+
+    private Occur occur;
+
+    private boolean exact;
+
+    private CriteriaOptions() {
+      this.occur = Occur.MUST;
+      this.exact = true;
+    }
+
+    public CriteriaOptions with(Occur occurrancePolicy) {
+      this.occur = occurrancePolicy;
+      return this;
+    }
+
+    public CriteriaOptions partialInput() {
+      this.exact = false;
+      return this;
+    }
+  }
+
+  private abstract static class QueryCriteria extends Criteria {
+
+    public QueryCriteria(CriteriaOptions options, Indexer indexer) {
+      super(options, indexer);
+    }
+
+    public abstract Query getQuery();
+  }
+
+  private static class CompoundCriteria extends QueryCriteria {
+
+    private final List<QueryCriteria> criteria;
+
+    public CompoundCriteria(List<QueryCriteria> criteria, Indexer indexer) {
+      super(new CriteriaOptions(), indexer);
+      if (criteria == null || criteria.isEmpty()) {
+        throw new IllegalArgumentException("Null or empty criteria is not supported");
+      }
+      this.criteria = criteria;
+    }
+
+    @Override
+    public Query getQuery() {
+      if (criteria.size() == 1) {
+        return criteria.get(0).getQuery();
+      }
+      BooleanQuery.Builder builder = new BooleanQuery.Builder();
+      criteria.forEach(c -> builder.add(c.getQuery(), c.getOptions().occur));
+      return builder.build();
+    }
+
+    @Override
+    public String toString() {
+      return "["
+          + criteria.stream().map(Criteria::toString).collect(Collectors.joining(", "))
+          + "]";
+    }
+  }
+
+  private static class KeyValueCriteria extends QueryCriteria {
 
     private final Field field;
 
     private final String value;
 
-    private Occur occurrancePolicy = Occur.MUST;
-
-    private boolean exact = true;
-
-    private Criteria(Field field, String value) {
+    private KeyValueCriteria(Field field, String value, CriteriaOptions options, Indexer indexer) {
+      super(options, indexer);
       this.field = field;
       this.value = value;
     }
 
-    public Criteria partialInput() {
-      this.exact = false;
-      return this;
-    }
-
-    public Criteria with(Occur occurrancePolicy) {
-      this.occurrancePolicy = occurrancePolicy;
-      return this;
-    }
-
-    public static Criteria of(Field field, String value) {
-      return new Criteria(field, value);
+    @Override
+    public Query getQuery() {
+      return getIndexer()
+          .constructQuery(
+              field,
+              getOptions().exact
+                  ? new SourcedSearchExpression(value)
+                  : new UserInputSearchExpression(value));
     }
 
     @Override
@@ -514,8 +621,8 @@ public class IndexingExample implements Callable<Void>, Closeable {
     }
 
     private String getOperator() {
-      if (exact) {
-        switch (occurrancePolicy) {
+      if (getOptions().exact) {
+        switch (getOptions().occur) {
           case MUST:
           case FILTER:
             return "MUST MATCH";
@@ -525,7 +632,7 @@ public class IndexingExample implements Callable<Void>, Closeable {
             return "MUST NOT MATCH";
         }
       } else {
-        switch (occurrancePolicy) {
+        switch (getOptions().occur) {
           case MUST:
           case FILTER:
             return "MUST START WITH";
@@ -538,7 +645,7 @@ public class IndexingExample implements Callable<Void>, Closeable {
       throw new IllegalStateException(
           String.format(
               "Unexpected combination of values, exact = '%s' and occurrance = '%s'",
-              exact, occurrancePolicy));
+              getOptions().exact, getOptions().occur));
     }
   }
 
