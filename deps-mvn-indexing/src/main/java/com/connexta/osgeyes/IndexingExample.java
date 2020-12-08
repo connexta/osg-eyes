@@ -12,11 +12,9 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -65,8 +63,6 @@ public class IndexingExample implements Callable<Void>, Closeable {
 
   private static final String MIN_INDEX_CREATOR_ID = "min";
 
-  private static final String OSGI_INDEX_CREATOR_ID = "osgi-metadatas";
-
   private final PlexusContainer plexusContainer;
 
   private final Indexer indexer;
@@ -106,6 +102,8 @@ public class IndexingExample implements Callable<Void>, Closeable {
 
     plexusContainer.addComponent(
         new MvnHierarchyIndexCreator(), IndexCreator.class, MvnHierarchyIndexCreator.ID);
+    plexusContainer.addComponent(
+        new JarManifestIndexCreator(), IndexCreator.class, JarManifestIndexCreator.ID);
   }
 
   @Nullable
@@ -339,8 +337,8 @@ public class IndexingExample implements Callable<Void>, Closeable {
     final List<IndexCreator> indexers = new ArrayList<>();
 
     indexers.add(plexusContainer.lookup(IndexCreator.class, MIN_INDEX_CREATOR_ID));
-    indexers.add(plexusContainer.lookup(IndexCreator.class, OSGI_INDEX_CREATOR_ID));
     indexers.add(plexusContainer.lookup(IndexCreator.class, MvnHierarchyIndexCreator.ID));
+    indexers.add(plexusContainer.lookup(IndexCreator.class, JarManifestIndexCreator.ID));
 
     final Supplier<IndexingContext> contextSupplier =
         () -> {
@@ -446,18 +444,8 @@ public class IndexingExample implements Callable<Void>, Closeable {
     final FlatSearchResponse response =
         indexer.searchFlat(new FlatSearchRequest(query, indexingContext));
 
-    final Map<String, Function<ArtifactInfo, String>> osgiOps = new HashMap<>();
-    osgiOps.put("bundle-symbolic-name", ArtifactInfo::getBundleSymbolicName);
-    osgiOps.put("bundle-import-package", ArtifactInfo::getBundleImportPackage);
-    osgiOps.put("bundle-export-package", ArtifactInfo::getBundleExportPackage);
-    //    osgiOps.put("bundle-import-service", null);
-    osgiOps.put("bundle-export-service", ArtifactInfo::getBundleExportService);
-    osgiOps.put("bundle-require-capability", ArtifactInfo::getBundleRequireCapability);
-    osgiOps.put("bundle-provide-capability", ArtifactInfo::getBundleProvideCapability);
-
     for (ArtifactInfo artifact : response.getResults()) {
       logline(artifact.toString());
-      osgiOps.forEach((k, f) -> logline(" [ " + k + " " + f.apply(artifact) + " ] "));
       artifact.getAttributes().forEach((k, v) -> logline("  [ " + k + " " + v + " ]"));
     }
 

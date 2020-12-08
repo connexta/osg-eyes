@@ -10,4 +10,7 @@ public interface MvnOntology {
   Field POM_PARENT = new Field(null, NAMESPACE, "POM_PARENT", "The parent element of the pom");
 
   Field POM_MODULES = new Field(null, NAMESPACE, "POM_MODULES", "The modules element of the pom");
+
+  Field JAR_MANIFEST =
+      new Field(null, NAMESPACE, "JAR_MANIFEST", "Plain text content of the jar manifest");
 }
