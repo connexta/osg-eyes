@@ -10,26 +10,23 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
 import org.apache.maven.index.ArtifactInfo;
 import org.apache.maven.index.ArtifactInfoFilter;
 import org.apache.maven.index.ArtifactInfoGroup;
 import org.apache.maven.index.ArtifactScanningListener;
 import org.apache.maven.index.DefaultScannerListener;
-import org.apache.maven.index.Field;
 import org.apache.maven.index.FlatSearchRequest;
 import org.apache.maven.index.FlatSearchResponse;
 import org.apache.maven.index.GroupedSearchRequest;
@@ -46,8 +43,6 @@ import org.apache.maven.index.ScanningResult;
 import org.apache.maven.index.context.ExistingLuceneIndexMismatchException;
 import org.apache.maven.index.context.IndexCreator;
 import org.apache.maven.index.context.IndexingContext;
-import org.apache.maven.index.expr.SourcedSearchExpression;
-import org.apache.maven.index.expr.UserInputSearchExpression;
 import org.apache.maven.index.search.grouping.GAGrouping;
 import org.codehaus.plexus.DefaultContainerConfiguration;
 import org.codehaus.plexus.DefaultPlexusContainer;
@@ -56,10 +51,7 @@ import org.codehaus.plexus.PlexusContainer;
 import org.codehaus.plexus.PlexusContainerException;
 import org.codehaus.plexus.component.repository.exception.ComponentLookupException;
 import org.codehaus.plexus.util.StringUtils;
-import org.eclipse.aether.util.version.GenericVersionScheme;
 import org.eclipse.aether.version.InvalidVersionSpecificationException;
-import org.eclipse.aether.version.Version;
-import org.eclipse.aether.version.VersionScheme;
 
 public class IndexingExample implements Callable<Void>, Closeable {
 
@@ -215,7 +207,7 @@ public class IndexingExample implements Callable<Void>, Closeable {
       //          Criteria.of(MAVEN.VERSION, "2.19.5"));
       //      waitForUserToContinue();
 
-      QueryCriteria packagingIsPomOrBundle =
+      Criteria.Queryable packagingIsPomOrBundle =
           criteria.of(
               criteria.of(MAVEN.PACKAGING, "pom", criteria.options().with(Occur.SHOULD)),
               criteria.of(MAVEN.PACKAGING, "bundle", criteria.options().with(Occur.SHOULD)));
@@ -424,7 +416,7 @@ public class IndexingExample implements Callable<Void>, Closeable {
   }
 
   private void search(
-      IndexingContext indexingContext, ArtifactInfoFilter filter, QueryCriteria criteria)
+      IndexingContext indexingContext, ArtifactInfoFilter filter, Criteria.Queryable criteria)
       throws IOException {
     final Query query = criteria.getQuery();
     logline("Searching for " + criteria.toString());
@@ -443,7 +435,8 @@ public class IndexingExample implements Callable<Void>, Closeable {
     logline();
   }
 
-  private void search(IndexingContext indexingContext, QueryCriteria criteria) throws IOException {
+  private void search(IndexingContext indexingContext, Criteria.Queryable criteria)
+      throws IOException {
     final Query query = criteria.getQuery();
     logline("Searching for " + criteria.toString());
     search(indexingContext, query);
@@ -453,8 +446,18 @@ public class IndexingExample implements Callable<Void>, Closeable {
     final FlatSearchResponse response =
         indexer.searchFlat(new FlatSearchRequest(query, indexingContext));
 
+    final Map<String, Function<ArtifactInfo, String>> osgiOps = new HashMap<>();
+    osgiOps.put("bundle-symbolic-name", ArtifactInfo::getBundleSymbolicName);
+    osgiOps.put("bundle-import-package", ArtifactInfo::getBundleImportPackage);
+    osgiOps.put("bundle-export-package", ArtifactInfo::getBundleExportPackage);
+    //    osgiOps.put("bundle-import-service", null);
+    osgiOps.put("bundle-export-service", ArtifactInfo::getBundleExportService);
+    osgiOps.put("bundle-require-capability", ArtifactInfo::getBundleRequireCapability);
+    osgiOps.put("bundle-provide-capability", ArtifactInfo::getBundleProvideCapability);
+
     for (ArtifactInfo artifact : response.getResults()) {
       logline(artifact.toString());
+      osgiOps.forEach((k, f) -> logline(" [ " + k + " " + f.apply(artifact) + " ] "));
       artifact.getAttributes().forEach((k, v) -> logline("  [ " + k + " " + v + " ]"));
     }
 
@@ -464,7 +467,7 @@ public class IndexingExample implements Callable<Void>, Closeable {
   }
 
   private void searchGrouped(
-      IndexingContext indexingContext, Grouping grouping, QueryCriteria criteria)
+      IndexingContext indexingContext, Grouping grouping, Criteria.Queryable criteria)
       throws IOException {
     final int maxArtifactDescriptionStringWidth = 60;
     final Query query = criteria.getQuery();
@@ -489,255 +492,6 @@ public class IndexingExample implements Callable<Void>, Closeable {
     logline("------------");
     logline("Total record hits: " + response.getTotalHitsCount());
     logline();
-  }
-
-  private static class Criteria {
-
-    private final CriteriaOptions options;
-
-    // Goal is to eventually remove this as an inverted dependency
-    private final Indexer indexer;
-
-    public Criteria(Indexer indexer) {
-      this(new CriteriaOptions(), indexer);
-    }
-
-    public Criteria(CriteriaOptions options, Indexer indexer) {
-      this.options = Objects.requireNonNull(options, "options cannot be null");
-      this.indexer = Objects.requireNonNull(indexer, "indexer cannot be null");
-    }
-
-    public CriteriaOptions getOptions() {
-      return options;
-    }
-
-    public Indexer getIndexer() {
-      return indexer;
-    }
-
-    public QueryCriteria of(Field field, String value) {
-      return new KeyValueCriteria(field, value, new CriteriaOptions(), indexer);
-    }
-
-    public QueryCriteria of(Field field, String value, CriteriaOptions options) {
-      return new KeyValueCriteria(field, value, options, indexer);
-    }
-
-    public QueryCriteria of(QueryCriteria... criteria) {
-      return new CompoundCriteria(Arrays.asList(criteria), indexer);
-    }
-
-    public CriteriaOptions options() {
-      return new CriteriaOptions();
-    }
-  }
-
-  private static class CriteriaOptions {
-
-    private Occur occur;
-
-    private boolean exact;
-
-    private CriteriaOptions() {
-      this.occur = Occur.MUST;
-      this.exact = true;
-    }
-
-    public CriteriaOptions with(Occur occurrancePolicy) {
-      this.occur = occurrancePolicy;
-      return this;
-    }
-
-    public CriteriaOptions partialInput() {
-      this.exact = false;
-      return this;
-    }
-  }
-
-  private abstract static class QueryCriteria extends Criteria {
-
-    public QueryCriteria(CriteriaOptions options, Indexer indexer) {
-      super(options, indexer);
-    }
-
-    public abstract Query getQuery();
-  }
-
-  private static class CompoundCriteria extends QueryCriteria {
-
-    private final List<QueryCriteria> criteria;
-
-    public CompoundCriteria(List<QueryCriteria> criteria, Indexer indexer) {
-      super(new CriteriaOptions(), indexer);
-      if (criteria == null || criteria.isEmpty()) {
-        throw new IllegalArgumentException("Null or empty criteria is not supported");
-      }
-      this.criteria = criteria;
-    }
-
-    @Override
-    public Query getQuery() {
-      if (criteria.size() == 1) {
-        return criteria.get(0).getQuery();
-      }
-      BooleanQuery.Builder builder = new BooleanQuery.Builder();
-      criteria.forEach(c -> builder.add(c.getQuery(), c.getOptions().occur));
-      return builder.build();
-    }
-
-    @Override
-    public String toString() {
-      return "["
-          + criteria.stream().map(Criteria::toString).collect(Collectors.joining(", "))
-          + "]";
-    }
-  }
-
-  private static class KeyValueCriteria extends QueryCriteria {
-
-    private final Field field;
-
-    private final String value;
-
-    private KeyValueCriteria(Field field, String value, CriteriaOptions options, Indexer indexer) {
-      super(options, indexer);
-      this.field = field;
-      this.value = value;
-    }
-
-    @Override
-    public Query getQuery() {
-      return getIndexer()
-          .constructQuery(
-              field,
-              getOptions().exact
-                  ? new SourcedSearchExpression(value)
-                  : new UserInputSearchExpression(value));
-    }
-
-    @Override
-    public String toString() {
-      return String.format("(%s %s %s)", field.getFieldName(), getOperator(), value);
-    }
-
-    private String getOperator() {
-      if (getOptions().exact) {
-        switch (getOptions().occur) {
-          case MUST:
-          case FILTER:
-            return "MUST MATCH";
-          case SHOULD:
-            return "SHOULD MATCH";
-          case MUST_NOT:
-            return "MUST NOT MATCH";
-        }
-      } else {
-        switch (getOptions().occur) {
-          case MUST:
-          case FILTER:
-            return "MUST START WITH";
-          case SHOULD:
-            return "SHOULD START WITH";
-          case MUST_NOT:
-            return "MUST NOT START WITH";
-        }
-      }
-      throw new IllegalStateException(
-          String.format(
-              "Unexpected combination of values, exact = '%s' and occurrance = '%s'",
-              getOptions().exact, getOptions().occur));
-    }
-  }
-
-  private static class VersionRangeFilter implements ArtifactInfoFilter {
-
-    private final VersionScheme versionScheme = new GenericVersionScheme();
-
-    // Nullable
-    private final Version minVer;
-
-    // Nullable
-    private final Version maxVer;
-
-    private final boolean exclusiveMin;
-
-    private final boolean exclusiveMax;
-
-    public static VersionRangeFilter atMinimum(String version)
-        throws InvalidVersionSpecificationException {
-      checkVersionString(version);
-      return new VersionRangeFilter(version, null, false, false);
-    }
-
-    public static VersionRangeFilter atMaximum(String version)
-        throws InvalidVersionSpecificationException {
-      checkVersionString(version);
-      return new VersionRangeFilter(null, version, false, false);
-    }
-
-    private VersionRangeFilter(
-        String minVer, String maxVer, boolean exclusiveMin, boolean exclusiveMax)
-        throws InvalidVersionSpecificationException {
-      this.minVer = minVer == null ? null : versionScheme.parseVersion(minVer);
-      this.maxVer = maxVer == null ? null : versionScheme.parseVersion(maxVer);
-      this.exclusiveMin = exclusiveMin;
-      this.exclusiveMax = exclusiveMax;
-    }
-
-    private VersionRangeFilter(
-        Version minVer, Version maxVer, boolean exclusiveMin, boolean exclusiveMax) {
-      this.minVer = minVer;
-      this.maxVer = maxVer;
-      this.exclusiveMin = exclusiveMin;
-      this.exclusiveMax = exclusiveMax;
-    }
-
-    public VersionRangeFilter butStrictlyLessThan(String version)
-        throws InvalidVersionSpecificationException {
-      checkVersionString(version);
-      return new VersionRangeFilter(
-          this.minVer, versionScheme.parseVersion(version), this.exclusiveMin, true);
-    }
-
-    public VersionRangeFilter butStrictlyGreaterThan(String version)
-        throws InvalidVersionSpecificationException {
-      checkVersionString(version);
-      return new VersionRangeFilter(
-          versionScheme.parseVersion(version), this.maxVer, true, this.exclusiveMax);
-    }
-
-    @Override
-    public boolean accepts(IndexingContext ctx, ArtifactInfo ai) {
-      try {
-        final Version artifactVersion = versionScheme.parseVersion(ai.getVersion());
-        boolean matchesMin;
-        if (minVer == null) {
-          matchesMin = true;
-        } else if (exclusiveMin) {
-          matchesMin = artifactVersion.compareTo(minVer) > 0;
-        } else {
-          matchesMin = artifactVersion.compareTo(minVer) >= 0;
-        }
-        boolean matchesMax;
-        if (maxVer == null) {
-          matchesMax = true;
-        } else if (exclusiveMax) {
-          matchesMax = artifactVersion.compareTo(maxVer) < 0;
-        } else {
-          matchesMax = artifactVersion.compareTo(maxVer) <= 0;
-        }
-        return matchesMin && matchesMax;
-      } catch (InvalidVersionSpecificationException e) {
-        // Do something here? Be safe and include?
-        return true;
-      }
-    }
-
-    private static void checkVersionString(String version) {
-      if (version == null || version.isEmpty()) {
-        throw new IllegalArgumentException("Cannot supply a null or empty version");
-      }
-    }
   }
 
   private static void logline() {
