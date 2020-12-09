@@ -1,4 +1,4 @@
-package com.connexta.osgeyes;
+package com.connexta.osgeyes.index;
 
 import org.apache.maven.index.Field;
 

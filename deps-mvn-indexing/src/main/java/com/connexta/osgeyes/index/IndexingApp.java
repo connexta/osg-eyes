@@ -1,4 +1,4 @@
-package com.connexta.osgeyes;
+package com.connexta.osgeyes.index;
 
 import java.io.BufferedReader;
 import java.io.Closeable;
