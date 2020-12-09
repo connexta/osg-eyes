@@ -4,7 +4,7 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
-public class IndexingExampleTest {
+public class IndexingAppTest {
 
   @Test
   public void testExampleIndexing() {

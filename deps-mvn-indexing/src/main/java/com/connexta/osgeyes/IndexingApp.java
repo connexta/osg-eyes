@@ -13,23 +13,21 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.Query;
 import org.apache.maven.index.ArtifactInfo;
 import org.apache.maven.index.ArtifactInfoFilter;
-import org.apache.maven.index.ArtifactInfoGroup;
 import org.apache.maven.index.ArtifactScanningListener;
 import org.apache.maven.index.DefaultScannerListener;
 import org.apache.maven.index.FlatSearchRequest;
 import org.apache.maven.index.FlatSearchResponse;
-import org.apache.maven.index.GroupedSearchRequest;
-import org.apache.maven.index.GroupedSearchResponse;
-import org.apache.maven.index.Grouping;
 import org.apache.maven.index.Indexer;
 import org.apache.maven.index.IndexerEngine;
 import org.apache.maven.index.IteratorSearchRequest;
@@ -41,17 +39,36 @@ import org.apache.maven.index.ScanningResult;
 import org.apache.maven.index.context.ExistingLuceneIndexMismatchException;
 import org.apache.maven.index.context.IndexCreator;
 import org.apache.maven.index.context.IndexingContext;
-import org.apache.maven.index.search.grouping.GAGrouping;
 import org.codehaus.plexus.DefaultContainerConfiguration;
 import org.codehaus.plexus.DefaultPlexusContainer;
 import org.codehaus.plexus.PlexusConstants;
 import org.codehaus.plexus.PlexusContainer;
 import org.codehaus.plexus.PlexusContainerException;
 import org.codehaus.plexus.component.repository.exception.ComponentLookupException;
-import org.codehaus.plexus.util.StringUtils;
-import org.eclipse.aether.version.InvalidVersionSpecificationException;
 
-public class IndexingExample implements Callable<Void>, Closeable {
+/**
+ * Custom Maven indexing app to provide build data directly to Clojure tooling.
+ *
+ * <p>(TO DO) Next primary objective is to figure out how this object's {@link Closeable} lifecycle
+ * will work within a Clojure namespace.
+ *
+ * <p>(TO DO) Outstanding mvn-indexer behavior cases to verify:
+ *
+ * <ul>
+ *   <li>VersionRangeFilter cases (max, min, and variations on bounds, inclusive/exclusive)
+ *   <li>Criteria.of(MAVEN.PACKAGING, "jar")
+ *   <li>Criteria.of(MAVEN.CLASSIFIER, Field.NOT_PRESENT).with(Occur.MUST_NOT)
+ *   <li>Criteria.of(MAVEN.CLASSIFIER, "*").with(Occur.MUST_NOT)
+ * </ul>
+ *
+ * <p>(TO DO) Other mvn-indexer behaviors to review:
+ *
+ * <ul>
+ *   <li>How grouped searches behave
+ *   <li>Differences between iterator and flat searches
+ * </ul>
+ */
+public class IndexingApp implements Callable<Void>, Closeable {
 
   private static final String PROP_WORKING_DIR = System.getProperty("user.dir");
 
@@ -76,7 +93,7 @@ public class IndexingExample implements Callable<Void>, Closeable {
   private final Criteria criteria;
 
   public static void main(String[] args) throws Exception {
-    try (final IndexingExample app = new IndexingExample()) {
+    try (final IndexingApp app = new IndexingApp()) {
       app.call();
     }
   }
@@ -86,7 +103,7 @@ public class IndexingExample implements Callable<Void>, Closeable {
     consoleIn.close();
   }
 
-  public IndexingExample() throws PlexusContainerException, ComponentLookupException {
+  public IndexingApp() throws PlexusContainerException, ComponentLookupException {
     // Create a Plexus container, the Maven default IoC container
     // Note that maven-indexer is a Plexus component
     final DefaultContainerConfiguration config = new DefaultContainerConfiguration();
@@ -185,57 +202,6 @@ public class IndexingExample implements Callable<Void>, Closeable {
       // remoteIndexUpdate(indexingContext);
       waitForUserToContinue();
 
-      // No need to list artifacts right now
-      // listAllArtifacts(indexingContext);
-      // waitForUserToContinue();
-
-      //      search(
-      //          indexingContext,
-      //          VersionRangeFilter.atMinimum("2.19.0").butStrictlyLessThan("2.20.0"),
-      //          Criteria.of(MAVEN.GROUP_ID, "ddf"),
-      //          Criteria.of(MAVEN.ARTIFACT_ID, "ddf"),
-      //          Criteria.of(MAVEN.PACKAGING, "pom"));
-      //      waitForUserToContinue();
-      //
-      //      search(
-      //          indexingContext,
-      //          Criteria.of(MAVEN.GROUP_ID, "ddf"),
-      //          Criteria.of(MAVEN.ARTIFACT_ID, "ddf"),
-      //          Criteria.of(MAVEN.PACKAGING, "pom"),
-      //          Criteria.of(MAVEN.VERSION, "2.19.5"));
-      //      waitForUserToContinue();
-
-      Criteria.Queryable packagingIsPomOrBundle =
-          criteria.of(
-              criteria.of(MAVEN.PACKAGING, "pom", criteria.options().with(Occur.SHOULD)),
-              criteria.of(MAVEN.PACKAGING, "bundle", criteria.options().with(Occur.SHOULD)));
-
-      search(
-          indexingContext,
-          // Criteria.of(MAVEN.VERSION, "2.19.5"),
-          // Criteria.of(MvnOntology.POM_MODULES, "catalog"),
-          criteria.of(
-              criteria.of(MAVEN.ARTIFACT_ID, "catalog"),
-              criteria.of(MvnOntology.POM_PARENT, "mvn:ddf/ddf/2.19.5"),
-              packagingIsPomOrBundle));
-      waitForUserToContinue();
-
-      search(
-          indexingContext,
-          criteria.of(
-              criteria.of(MAVEN.ARTIFACT_ID, "transformer"),
-              criteria.of(MvnOntology.POM_PARENT, "mvn:ddf.catalog/catalog/2.19.5"),
-              packagingIsPomOrBundle));
-      waitForUserToContinue();
-
-      search(
-          indexingContext,
-          criteria.of(
-              criteria.of(MAVEN.ARTIFACT_ID, "catalog-transformer-html"),
-              criteria.of(MvnOntology.POM_PARENT, "mvn:ddf.catalog.transformer/transformer/2.19.5"),
-              packagingIsPomOrBundle));
-      waitForUserToContinue();
-
       // OSGI Attributes are using an unsupported indexing model
       // --
       // search(indexingContext, Criteria.of(OSGI.IMPORT_PACKAGE, "ddf.catalog.validation*"));
@@ -245,6 +211,11 @@ public class IndexingExample implements Callable<Void>, Closeable {
       // --
       // searchGroupedMavenPlugins(indexingContext);
       // waitForUserToContinue();
+
+      Set<ArtifactInfo> results =
+          fetchHierarchy(indexingContext, MvnCoordinate.newInstance("ddf", "ddf", "2.19.5"));
+      lognames(results);
+      waitForUserToContinue();
 
     } finally {
       if (indexingContext != null) {
@@ -258,75 +229,139 @@ public class IndexingExample implements Callable<Void>, Closeable {
     return null;
   }
 
-  private void searchGroupedMavenPlugins(IndexingContext indexingContext) throws IOException {
-    searchGrouped(
-        indexingContext,
-        new GAGrouping(),
-        criteria.of(
-            criteria.of(MAVEN.GROUP_ID, "org.apache.maven.plugins"),
-            criteria.of(MAVEN.PACKAGING, "maven-plugin")));
-    waitForUserToContinue();
+  /**
+   * Returns a sorted set of all artifacts within a maven hierarchy, given the root of that
+   * hierarchy. Should accurately mimic traversing a code repository file structure.
+   *
+   * <p>Currently this search only targets modules with packaging {@code pom} or {@code bundle} but
+   * can be evolved to be more flexible in the future.
+   *
+   * @param context the context used for indexing.
+   * @param root the coordinate of the root node.
+   * @return a collection of all terminal artifacts within the hierarchy.
+   */
+  private Set<ArtifactInfo> fetchHierarchy(IndexingContext context, MvnCoordinate root)
+      throws IOException {
+
+    validateRoot(context, root);
+
+    final Set<ArtifactInfo> totalResults =
+        new TreeSet<>(
+            Comparator.comparing(ArtifactInfo::getGroupId)
+                .thenComparing(ArtifactInfo::getArtifactId)
+                .thenComparing(ArtifactInfo::getVersion));
+
+    boolean keepGoing = true;
+    List<MvnCoordinate> nextUp = new ArrayList<>();
+    nextUp.add(root);
+
+    do {
+
+      final List<FlatSearchRequest> requests =
+          nextUp.stream()
+              .map(this::createSubmoduleQuery)
+              .map(q -> new FlatSearchRequest(q, context))
+              .collect(Collectors.toList());
+
+      final List<FlatSearchResponse> responses = new ArrayList<>(requests.size());
+      for (FlatSearchRequest request : requests) {
+        responses.add(indexer.searchFlat(request));
+      }
+
+      final List<ArtifactInfo> results =
+          responses.stream()
+              .map(FlatSearchResponse::getResults)
+              .flatMap(Set::stream)
+              .collect(Collectors.toList());
+
+      totalResults.addAll(results);
+
+      keepGoing = !responses.isEmpty();
+      nextUp =
+          results.stream()
+              .map(
+                  info ->
+                      MvnCoordinate.newInstance(
+                          info.getGroupId(), info.getArtifactId(), info.getVersion()))
+              .collect(Collectors.toList());
+
+    } while (keepGoing);
+
+    return totalResults;
   }
 
-  private void searchMoreGuava(IndexingContext indexingContext)
-      throws InvalidVersionSpecificationException, IOException {
-
-    // CASES TO VERIFY
-    // - VersionRangeFilter cases (max, min, and variations on bounds, inclusive/exclusive)
-    // - Criteria.of(MAVEN.PACKAGING, "jar")
-    // - Criteria.of(MAVEN.CLASSIFIER, Field.NOT_PRESENT).with(Occur.MUST_NOT)
-    // - Criteria.of(MAVEN.CLASSIFIER, "*").with(Occur.MUST_NOT)
-    // ETC
-    // - How grouped searches behave
-    // - Differences between iterator and flat searches
-
-    search(
-        indexingContext,
+  /**
+   * Creates a query that will retrieve modules that specify the provided parent as their {@code
+   * <parent/>} in their pom.
+   *
+   * <p>The original strategy was to be a bit more precise with the query and leverage the {@code
+   * <modules/>} block as well, but there is no guarantee that a module string is also the artifact
+   * ID. See the discrepancy in DDF for an example.
+   *
+   * <p><a href="https://github.com/codice/ddf/blob/ddf-2.19.5/pom.xml#L1233">Parent</a> <a
+   * href="https://github.com/codice/ddf/blob/ddf-2.19.5/libs/pom.xml#L23">Child</a>
+   *
+   * <p>It was also intended to include 'jar' but those results were not necessary for this
+   * iteration and the artifacts would just have to be filtered down to bundles anyway (for now).
+   *
+   * @param parent the parent module.
+   * @return a query that will yield children of the parent.
+   */
+  private Query createSubmoduleQuery(MvnCoordinate parent) {
+    final Criteria.Queryable queryable =
         criteria.of(
-            criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
-            criteria.of(MAVEN.ARTIFACT_ID, "guava"),
-            criteria.of(MAVEN.PACKAGING, "bundle"),
-            criteria.of(MAVEN.CLASSIFIER, "*", criteria.options().with(Occur.MUST_NOT))));
-
-    search(
-        indexingContext,
-        criteria.of(
-            criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
-            criteria.of(MAVEN.ARTIFACT_ID, "guava"),
-            criteria.of(MAVEN.PACKAGING, "bundle"),
-            criteria.of(MAVEN.CLASSIFIER, "*", criteria.options().with(Occur.MUST_NOT))));
-
-    // Expected: [20.0, 27.0.1]
-    search(
-        indexingContext,
-        VersionRangeFilter.atMinimum("20.0"),
-        criteria.of(
-            criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
-            criteria.of(MAVEN.ARTIFACT_ID, "guava")));
-
-    // Expected: [14.0.1, 19.0]
-    search(
-        indexingContext,
-        VersionRangeFilter.atMinimum("14.0").butStrictlyLessThan("20.0"),
-        criteria.of(
-            criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
-            criteria.of(MAVEN.ARTIFACT_ID, "guava")));
-
-    // Expected: [19.0, 20.0]
-    search(
-        indexingContext,
-        VersionRangeFilter.atMaximum("20.0").butStrictlyGreaterThan("14.0.1"),
-        criteria.of(
-            criteria.of(MAVEN.GROUP_ID, "com.google.guava"),
-            criteria.of(MAVEN.ARTIFACT_ID, "guava")));
-
-    search(
-        indexingContext,
-        criteria.of(MAVEN.SHA1, "89507701249388", criteria.options().partialInput()));
-
-    waitForUserToContinue();
+            criteria.of(MvnOntology.POM_PARENT, MvnCoordinate.write(parent)),
+            // criteria.of(MAVEN.ARTIFACT_ID, submoduleArtifactId),
+            criteria.of(
+                criteria.of(MAVEN.PACKAGING, "pom", criteria.options().with(Occur.SHOULD)),
+                // criteria.of(MAVEN.PACKAGING, "jar", criteria.options().with(Occur.SHOULD)),
+                criteria.of(MAVEN.PACKAGING, "bundle", criteria.options().with(Occur.SHOULD))));
+    logline("Building query " + queryable.toString());
+    return queryable.getQuery();
   }
 
+  /**
+   * Ensures the provided "root" maven coordinate exists and is suitable for retrieving a hierarchy.
+   * Right now only {@code <packaging>pom</packaging>} is supported for hierarchies.
+   *
+   * @param context indexing context used for querying.
+   * @param root target maven artifact to validate.
+   * @throws IllegalArgumentException if root is invalid for the purposes of hierarchy retrieval.
+   * @throws IOException if any intermediate queries fail.
+   */
+  private void validateRoot(IndexingContext context, MvnCoordinate root) throws IOException {
+    final Query rootCriteria =
+        criteria
+            .of(
+                criteria.of(MAVEN.GROUP_ID, root.getGroupId()),
+                criteria.of(MAVEN.ARTIFACT_ID, root.getArtifactId()),
+                criteria.of(MAVEN.VERSION, root.getVersion()),
+                criteria.of(MAVEN.PACKAGING, "pom"))
+            .getQuery();
+
+    final FlatSearchResponse rootResponse =
+        indexer.searchFlat(new FlatSearchRequest(rootCriteria, context));
+
+    final Set<ArtifactInfo> rootResults = rootResponse.getResults();
+    if (rootResults.size() != 1) {
+      throw new IllegalArgumentException("Provided root coordinates did not yield a single result");
+    }
+  }
+
+  /**
+   * Attempts to create an {@link IndexingContext} for use on a local M2 repository.
+   *
+   * <p>The default index location will be in {@code ~/.m2/repository/.index/} right alongside the
+   * artifacts themselves, unless system property {@code user.repo} is specified to overwrite this.
+   *
+   * @see #getRepoLocation()
+   * @see #getUserSpecifiedRepoLocation()
+   * @param repoLocation the location to create the index directory for storing the index.
+   * @return an indexing context for the user's local maven repository.
+   * @throws IOException if an error occurs during index discovery or initialization.
+   * @throws ComponentLookupException if the application container doesn't have requisite
+   *     dependencies.
+   */
   private IndexingContext indexTryCreate(Path repoLocation)
       throws IOException, ComponentLookupException {
     final Path indexLocation = repoLocation.resolve(INDEX_DIR_NAME);
@@ -423,10 +458,7 @@ public class IndexingExample implements Callable<Void>, Closeable {
         indexer.searchIterator(
             new IteratorSearchRequest(query, Collections.singletonList(indexingContext), filter));
 
-    for (ArtifactInfo artifact : response.getResults()) {
-      logline(artifact.toString());
-      artifact.getAttributes().forEach((k, v) -> logline("  [ " + k + " " + v + " ]"));
-    }
+    lognames(response.getResults());
 
     logline("------------");
     logline("Total: " + response.getTotalHitsCount());
@@ -444,41 +476,10 @@ public class IndexingExample implements Callable<Void>, Closeable {
     final FlatSearchResponse response =
         indexer.searchFlat(new FlatSearchRequest(query, indexingContext));
 
-    for (ArtifactInfo artifact : response.getResults()) {
-      logline(artifact.toString());
-      artifact.getAttributes().forEach((k, v) -> logline("  [ " + k + " " + v + " ]"));
-    }
+    lognames(response.getResults());
 
     logline("------------");
     logline("Total: " + response.getTotalHitsCount());
-    logline();
-  }
-
-  private void searchGrouped(
-      IndexingContext indexingContext, Grouping grouping, Criteria.Queryable criteria)
-      throws IOException {
-    final int maxArtifactDescriptionStringWidth = 60;
-    final Query query = criteria.getQuery();
-    logline("Searching (grouped) for " + criteria.toString());
-
-    final GroupedSearchResponse response =
-        indexer.searchGrouped(new GroupedSearchRequest(query, grouping, indexingContext));
-
-    for (Map.Entry<String, ArtifactInfoGroup> entry : response.getResults().entrySet()) {
-      final ArtifactInfo artifact = entry.getValue().getArtifactInfos().iterator().next();
-      logline("Entry: " + artifact);
-      logline("Latest version:  " + artifact.getVersion());
-      logline(
-          StringUtils.isBlank(artifact.getDescription())
-              ? "No description in plugin's POM."
-              : StringUtils.abbreviate(
-                  artifact.getDescription(), maxArtifactDescriptionStringWidth));
-      artifact.getAttributes().forEach((k, v) -> logline("  [ " + k + " " + v + " ]"));
-      logline();
-    }
-
-    logline("------------");
-    logline("Total record hits: " + response.getTotalHitsCount());
     logline();
   }
 
@@ -488,6 +489,19 @@ public class IndexingExample implements Callable<Void>, Closeable {
 
   private static void logline(String log) {
     System.out.println(log);
+  }
+
+  private static void lognames(Iterable<ArtifactInfo> artifacts) {
+    for (ArtifactInfo artifact : artifacts) {
+      logline(artifact.toString());
+    }
+  }
+
+  private static void logall(Iterable<ArtifactInfo> artifacts) {
+    for (ArtifactInfo artifact : artifacts) {
+      logline(artifact.toString());
+      artifact.getAttributes().forEach((k, v) -> logline("  [ " + k + " " + v + " ]"));
+    }
   }
 
   private void waitForUserToContinue() throws IOException {

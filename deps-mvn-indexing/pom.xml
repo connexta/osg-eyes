@@ -100,7 +100,7 @@
 						<configuration>
 							<archive>
 								<manifest>
-									<mainClass>com.connexta.osgeyes.IndexingExample</mainClass>
+									<mainClass>com.connexta.osgeyes.IndexingApp</mainClass>
 								</manifest>
 							</archive>
 							<descriptorRefs>
