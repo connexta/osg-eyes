@@ -15,7 +15,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -68,7 +67,7 @@ import org.codehaus.plexus.component.repository.exception.ComponentLookupExcepti
  *   <li>Differences between iterator and flat searches
  * </ul>
  */
-public class IndexingApp implements Callable<Void>, Closeable {
+public class IndexingApp implements Closeable {
 
   private static final String PROP_WORKING_DIR = System.getProperty("user.dir");
 
@@ -80,6 +79,9 @@ public class IndexingApp implements Callable<Void>, Closeable {
 
   private static final String MIN_INDEX_CREATOR_ID = "min";
 
+  // Using a singleton helps the object cleanly map to a Clojure namespace
+  private static IndexingApp INSTANCE = null;
+
   private final PlexusContainer plexusContainer;
 
   private final Indexer indexer;
@@ -88,22 +90,40 @@ public class IndexingApp implements Callable<Void>, Closeable {
 
   private final Scanner repositoryScanner;
 
+  // Next up we're going to separate this as part of a standalone app
+  // also move output to logger instead of std out
   private final BufferedReader consoleIn;
 
   private final Criteria criteria;
 
-  public static void main(String[] args) throws Exception {
-    try (final IndexingApp app = new IndexingApp()) {
-      app.call();
+  // Controlled by object open(...) / close() lifecycle
+  private IndexingContext indexingContext = null;
+
+  // Using a singleton helps the object cleanly map to a Clojure namespace
+  public static IndexingApp getInstance()
+      throws PlexusContainerException, ComponentLookupException {
+    if (INSTANCE == null) {
+      INSTANCE = new IndexingApp();
+      // In the REPL I keep forgetting to call close() so this just helps cover our bases.
+      // Although, since we're SIGKILL-ing on REPL close this might not help anyway.
+      Runtime.getRuntime().addShutdownHook(new Thread(IndexingApp::indexClosingShutdownHook));
+    }
+
+    return INSTANCE;
+  }
+
+  private static void indexClosingShutdownHook() {
+    if (INSTANCE == null) {
+      return;
+    }
+    try {
+      INSTANCE.close();
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
     }
   }
 
-  @Override
-  public void close() throws IOException {
-    consoleIn.close();
-  }
-
-  public IndexingApp() throws PlexusContainerException, ComponentLookupException {
+  private IndexingApp() throws PlexusContainerException, ComponentLookupException {
     // Create a Plexus container, the Maven default IoC container
     // Note that maven-indexer is a Plexus component
     final DefaultContainerConfiguration config = new DefaultContainerConfiguration();
@@ -121,6 +141,79 @@ public class IndexingApp implements Callable<Void>, Closeable {
         new MvnHierarchyIndexCreator(), IndexCreator.class, MvnHierarchyIndexCreator.ID);
     plexusContainer.addComponent(
         new JarManifestIndexCreator(), IndexCreator.class, JarManifestIndexCreator.ID);
+  }
+
+  /**
+   * Opens the indexing context and other resources necessary for querying.
+   *
+   * @param repoLocation the path of the repository to open.
+   * @throws IOException if an error occurs while opening the indexing resources.
+   * @throws ComponentLookupException if dependencies cannot be satisfied.
+   */
+  public void open(Path repoLocation) throws IOException, ComponentLookupException {
+    if (indexingContext != null) {
+      throw new IllegalStateException(
+          "Cannot open indexer, it's already open, " + indexingContext.toString());
+    }
+    indexingContext = indexTryCreate(repoLocation);
+    // Will revisit incremental updates later
+    // remoteIndexUpdate(indexingContext);
+  }
+
+  /**
+   * Closes the indexing app, along with the indexing context and other resources.
+   *
+   * @throws IOException if an error occurs while closing.
+   */
+  @Override
+  public void close() throws IOException {
+    consoleIn.close();
+    if (indexingContext != null) {
+      logline("Closing indexing context...");
+      indexer.closeIndexingContext(indexingContext, false);
+      logline("...done!");
+      indexingContext = null;
+    }
+  }
+
+  public static void main(String[] args) throws Exception {
+    try (final IndexingApp app = IndexingApp.getInstance()) {
+      logline("----------------------------------------------------------------------------------");
+      logline("OSG-Eyes Maven Indexer");
+      logline("----------------------------------------------------------------------------------");
+
+      final Path repoLocation = getRepoLocation();
+
+      logline("JVM working directory: " + PROP_WORKING_DIR);
+      logline("User home directory: " + PROP_USER_HOME);
+      logline("User repo directory: " + repoLocation);
+
+      logline("Registered index creators:");
+      app.plexusContainer
+          .getComponentDescriptorList(IndexCreator.class, null)
+          .forEach(cd -> logline("  " + cd.getImplementation()));
+
+      app.open(repoLocation);
+      app.waitForUserToContinue();
+
+      // OSGI Attributes are using an unsupported indexing model
+      // --
+      // search(indexingContext, Criteria.of(OSGI.IMPORT_PACKAGE, "ddf.catalog.validation*"));
+      // waitForUserToContinue();
+
+      // Sample grouped search
+      // --
+      // searchGroupedMavenPlugins(indexingContext);
+      // waitForUserToContinue();
+
+      Set<ArtifactInfo> results =
+          app.gatherHierarchy(MvnCoordinate.newInstance("ddf", "ddf", "2.19.5"));
+
+      lognames(results);
+      app.waitForUserToContinue();
+
+      logline("Shutting down");
+    }
   }
 
   @Nullable
@@ -147,7 +240,8 @@ public class IndexingApp implements Callable<Void>, Closeable {
     return null;
   }
 
-  private static Path getRepoLocation() {
+  // Invokable by Clojure
+  public static Path getRepoLocation() {
     // Set by the JVM - should not be null
     assert PROP_WORKING_DIR != null && !PROP_WORKING_DIR.isEmpty();
     assert PROP_USER_HOME != null && !PROP_USER_HOME.isEmpty();
@@ -178,55 +272,10 @@ public class IndexingApp implements Callable<Void>, Closeable {
     throw new IllegalStateException(message);
   }
 
-  @Override
-  public Void call() throws Exception {
-    logline("------------------------------------------------------------------------------------");
-    logline("OSG-Eyes Maven Indexer");
-    logline("------------------------------------------------------------------------------------");
-
-    final Path repoLocation = getRepoLocation();
-
-    logline("JVM working directory: " + PROP_WORKING_DIR);
-    logline("User home directory: " + PROP_USER_HOME);
-    logline("User repo directory: " + repoLocation);
-
-    logline("Registered index creators:");
-    plexusContainer
-        .getComponentDescriptorList(IndexCreator.class, null)
-        .forEach(cd -> logline("  " + cd.getImplementation()));
-
-    IndexingContext indexingContext = null;
-    try {
-      indexingContext = indexTryCreate(repoLocation);
-      // Will revisit incremental updates later
-      // remoteIndexUpdate(indexingContext);
-      waitForUserToContinue();
-
-      // OSGI Attributes are using an unsupported indexing model
-      // --
-      // search(indexingContext, Criteria.of(OSGI.IMPORT_PACKAGE, "ddf.catalog.validation*"));
-      // waitForUserToContinue();
-
-      // Sample grouped search
-      // --
-      // searchGroupedMavenPlugins(indexingContext);
-      // waitForUserToContinue();
-
-      Set<ArtifactInfo> results =
-          fetchHierarchy(indexingContext, MvnCoordinate.newInstance("ddf", "ddf", "2.19.5"));
-      lognames(results);
-      waitForUserToContinue();
-
-    } finally {
-      if (indexingContext != null) {
-        logline("Closing indexing context...");
-        indexer.closeIndexingContext(indexingContext, false);
-        logline("...done!");
-      }
-    }
-
-    logline("Shutting down");
-    return null;
+  // Clojure friendly wrapper
+  public Set<ArtifactInfo> gatherHierarchy(String groupId, String artifactId, String version)
+      throws IOException {
+    return gatherHierarchy(MvnCoordinate.newInstance(groupId, artifactId, version));
   }
 
   /**
@@ -236,14 +285,13 @@ public class IndexingApp implements Callable<Void>, Closeable {
    * <p>Currently this search only targets modules with packaging {@code pom} or {@code bundle} but
    * can be evolved to be more flexible in the future.
    *
-   * @param context the context used for indexing.
    * @param root the coordinate of the root node.
    * @return a collection of all terminal artifacts within the hierarchy.
    */
-  private Set<ArtifactInfo> fetchHierarchy(IndexingContext context, MvnCoordinate root)
-      throws IOException {
+  public Set<ArtifactInfo> gatherHierarchy(MvnCoordinate root) throws IOException {
 
-    validateRoot(context, root);
+    validateContext();
+    validateRoot(root);
 
     final Set<ArtifactInfo> totalResults =
         new TreeSet<>(
@@ -260,7 +308,7 @@ public class IndexingApp implements Callable<Void>, Closeable {
       final List<FlatSearchRequest> requests =
           nextUp.stream()
               .map(this::createSubmoduleQuery)
-              .map(q -> new FlatSearchRequest(q, context))
+              .map(q -> new FlatSearchRequest(q, indexingContext))
               .collect(Collectors.toList());
 
       final List<FlatSearchResponse> responses = new ArrayList<>(requests.size());
@@ -316,7 +364,7 @@ public class IndexingApp implements Callable<Void>, Closeable {
                 criteria.of(MAVEN.PACKAGING, "pom", criteria.options().with(Occur.SHOULD)),
                 // criteria.of(MAVEN.PACKAGING, "jar", criteria.options().with(Occur.SHOULD)),
                 criteria.of(MAVEN.PACKAGING, "bundle", criteria.options().with(Occur.SHOULD))));
-    logline("Building query " + queryable.toString());
+    // logline("Building query " + queryable.toString());
     return queryable.getQuery();
   }
 
@@ -324,12 +372,12 @@ public class IndexingApp implements Callable<Void>, Closeable {
    * Ensures the provided "root" maven coordinate exists and is suitable for retrieving a hierarchy.
    * Right now only {@code <packaging>pom</packaging>} is supported for hierarchies.
    *
-   * @param context indexing context used for querying.
    * @param root target maven artifact to validate.
    * @throws IllegalArgumentException if root is invalid for the purposes of hierarchy retrieval.
    * @throws IOException if any intermediate queries fail.
    */
-  private void validateRoot(IndexingContext context, MvnCoordinate root) throws IOException {
+  private void validateRoot(MvnCoordinate root) throws IOException {
+    // TODO - note that we might be able to sub-interface MAVEN with our own (MvnOntology too long)
     final Query rootCriteria =
         criteria
             .of(
@@ -340,11 +388,17 @@ public class IndexingApp implements Callable<Void>, Closeable {
             .getQuery();
 
     final FlatSearchResponse rootResponse =
-        indexer.searchFlat(new FlatSearchRequest(rootCriteria, context));
+        indexer.searchFlat(new FlatSearchRequest(rootCriteria, indexingContext));
 
     final Set<ArtifactInfo> rootResults = rootResponse.getResults();
     if (rootResults.size() != 1) {
       throw new IllegalArgumentException("Provided root coordinates did not yield a single result");
+    }
+  }
+
+  private void validateContext() {
+    if (indexingContext == null) {
+      throw new IllegalStateException("Cannot perform index operations on an unopened index");
     }
   }
 
@@ -448,9 +502,8 @@ public class IndexingApp implements Callable<Void>, Closeable {
     return indexingContext;
   }
 
-  private void search(
-      IndexingContext indexingContext, ArtifactInfoFilter filter, Criteria.Queryable criteria)
-      throws IOException {
+  private void search(ArtifactInfoFilter filter, Criteria.Queryable criteria) throws IOException {
+    validateContext();
     final Query query = criteria.getQuery();
     logline("Searching for " + criteria.toString());
 
@@ -465,14 +518,14 @@ public class IndexingApp implements Callable<Void>, Closeable {
     logline();
   }
 
-  private void search(IndexingContext indexingContext, Criteria.Queryable criteria)
-      throws IOException {
+  private void search(Criteria.Queryable criteria) throws IOException {
     final Query query = criteria.getQuery();
     logline("Searching for " + criteria.toString());
-    search(indexingContext, query);
+    search(query);
   }
 
-  private void search(IndexingContext indexingContext, Query query) throws IOException {
+  private void search(Query query) throws IOException {
+    validateContext();
     final FlatSearchResponse response =
         indexer.searchFlat(new FlatSearchRequest(query, indexingContext));
 

@@ -9,7 +9,7 @@
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
 	<artifactId>deps-mvn-indexing</artifactId>
-	<packaging>jar</packaging>
+	<packaging>clojure</packaging>
 
 	<name>OSG-Eyes :: Deps :: Maven Indexing</name>
 
@@ -19,6 +19,13 @@
 	</properties>
 
 	<dependencies>
+		<!-- Clojure -->
+		<dependency>
+			<groupId>org.clojure</groupId>
+			<artifactId>clojure</artifactId>
+			<version>${clojure.lang.version}</version>
+		</dependency>
+		<!-- Indexer -->
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-simple</artifactId>
@@ -83,6 +90,25 @@
 							<style>GOOGLE</style>
 						</googleJavaFormat>
 					</java>
+				</configuration>
+			</plugin>
+			<!-- Build Clojure -->
+			<plugin>
+				<groupId>com.theoryinpractise</groupId>
+				<artifactId>clojure-maven-plugin</artifactId>
+				<version>${maven.clojure.version}</version>
+				<extensions>true</extensions>
+				<configuration>
+					<!-- Mark source directories appropriately for proper IDE integration. -->
+					<sourceDirectories>
+						<sourceDirectory>src/main/clojure</sourceDirectory>
+					</sourceDirectories>
+					<testSourceDirectories>
+						<testSourceDirectory>src/test/clojure</testSourceDirectory>
+					</testSourceDirectories>
+					<!-- Take advantage of compiler syntax checking without actually packaging 
+						AOT classes. -->
+					<temporaryOutputDirectory>true</temporaryOutputDirectory>
 				</configuration>
 			</plugin>
 			<!-- Build executable jar -->
