@@ -1,13 +1,14 @@
 package com.connexta.osgeyes.index;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Scanner;
 import javax.inject.Named;
 import javax.inject.Singleton;
 import org.apache.lucene.document.Document;
@@ -130,8 +131,13 @@ public class JarManifestIndexCreator implements IndexCreator {
     return ID;
   }
 
-  private static String readAllBytes(InputStream in) {
-    final Scanner s = new Scanner(in).useDelimiter("\\A");
-    return s.hasNext() ? s.next() : "";
+  private static String readAllBytes(InputStream in) throws IOException {
+    final ByteArrayOutputStream result = new ByteArrayOutputStream();
+    byte[] buffer = new byte[1024];
+    int length;
+    while ((length = in.read(buffer)) != -1) {
+      result.write(buffer, 0, length);
+    }
+    return result.toString(StandardCharsets.UTF_8.name());
   }
 }

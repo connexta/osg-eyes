@@ -1,4 +1,4 @@
-(ns com.connexta.osgeyes.manifest
+(ns com.connexta.osgeyes.files.manifest
 
   "Support for parsing manifest files with OSGi metadata. The manifest is an example of a
   single 'layer' of dependency information. Another fitting term would be 'connector' since
@@ -65,6 +65,7 @@
         ::Karaf-Commands
         ::Web-ContextPath
         ::Webapp-Context
+        ::Main-Class
         ;; Temporary, should not couple to specific projects
         ::DDF-Mime-Type]))
 
@@ -238,9 +239,11 @@
   (let [kv-split (string/split line #": " 2)
         k (keyword namespace-name (first kv-split))
         v (last kv-split)]
+    (when (or (nil? line) (.isEmpty line))
+      (throw (IllegalArgumentException. (str "Bad manifest attribute for line '" line "'"))))
     [k v]))
 
-(defn- valid-keys?
+(defn valid-keys?
   "Ensures all parsed manifest keys are valid."
   [path pairs]
   (let [check
@@ -248,7 +251,7 @@
           (if (contains? manifest-attrs k)
             [k v]
             (throw (IllegalArgumentException.
-                     (str "Unexpected manifest attribute " k " in " path)))))]
+                     (str "Unexpected manifest attribute '" k "' in " path)))))]
     (map check pairs)))
 
 (defn parse-file
@@ -256,6 +259,7 @@
   [path]
   (->> path
        parse-path-to-lines
+       (filter #(not= "" %))
        (valid-manifest? path)
        (reduce reduce-lines [])
        (map line->pair)
@@ -268,6 +272,7 @@
   [content]
   (->> content
        parse-string-to-lines
+       (filter #(not= "" %))
        (valid-manifest? "memory")
        (reduce reduce-lines [])
        (map line->pair)

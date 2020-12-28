@@ -4,7 +4,8 @@
   is provided by supplying code via REPLy's :custom-eval option."
 
   (:require [reply.main :as reply]
-            [com.connexta.osgeyes.env :as env]))
+            [com.connexta.osgeyes.env :as env]
+            [com.connexta.osgeyes.index.core :as index]))
 
 ;; ----------------------------------------------------------------------
 ;; # Init & Main
@@ -54,12 +55,16 @@
              (catch Exception e
                (println (.getMessage e))
                (reply/parse-args ["--help"])))]
-    (if (:help options)
-      (println banner)
-      (reply/launch (into options
-                          {:custom-eval application-init
-                           :custom-help application-help})))
-    (shutdown-agents)))
+    (try
+      (index/open-indexer!)
+      (if (:help options)
+        (println banner)
+        (reply/launch (into options
+                            {:custom-eval application-init
+                             :custom-help application-help})))
+      (finally
+        (index/close-indexer!)
+        (shutdown-agents)))))
 
 ;; ----------------------------------------------------------------------
 ;; # Commentary

@@ -59,6 +59,14 @@
             <artifactId>dorothy</artifactId>
             <version>${dorothy.version}</version>
         </dependency>
+        <!--
+        Maven indexing support, in Clojure.
+        -->
+        <dependency>
+            <groupId>com.connexta.osgeyes</groupId>
+            <artifactId>deps-mvn-indexing</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
     <build>

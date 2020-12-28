@@ -10,14 +10,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 import javax.annotation.Nullable;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.Query;
@@ -127,7 +128,9 @@ public class IndexingApp implements Closeable {
     // Create a Plexus container, the Maven default IoC container
     // Note that maven-indexer is a Plexus component
     final DefaultContainerConfiguration config = new DefaultContainerConfiguration();
-    config.setClassPathScanning(PlexusConstants.SCANNING_INDEX);
+
+    // Needed SCANNING_ON instead of SCANNING_INDEX so other main modules can find components
+    config.setClassPathScanning(PlexusConstants.SCANNING_ON);
 
     this.plexusContainer = new DefaultPlexusContainer(config);
     this.indexer = plexusContainer.lookup(Indexer.class);
@@ -195,6 +198,13 @@ public class IndexingApp implements Closeable {
 
       app.open(repoLocation);
       app.waitForUserToContinue();
+      app.search(
+          IndexingApp.getInstance()
+              .criteria
+              .of(
+                  IndexingApp.getInstance().criteria.of(MAVEN.EXTENSION, "jar"),
+                  IndexingApp.getInstance().criteria.of(MAVEN.ARTIFACT_ID, "security-core-api"),
+                  IndexingApp.getInstance().criteria.of(MAVEN.VERSION, "2.19.5")));
 
       // OSGI Attributes are using an unsupported indexing model
       // --
@@ -206,7 +216,7 @@ public class IndexingApp implements Closeable {
       // searchGroupedMavenPlugins(indexingContext);
       // waitForUserToContinue();
 
-      Set<ArtifactInfo> results =
+      Collection<ArtifactInfo> results =
           app.gatherHierarchy(MvnCoordinate.newInstance("ddf", "ddf", "2.19.5"));
 
       lognames(results);
@@ -273,7 +283,7 @@ public class IndexingApp implements Closeable {
   }
 
   // Clojure friendly wrapper
-  public Set<ArtifactInfo> gatherHierarchy(String groupId, String artifactId, String version)
+  public Collection<ArtifactInfo> gatherHierarchy(String groupId, String artifactId, String version)
       throws IOException {
     return gatherHierarchy(MvnCoordinate.newInstance(groupId, artifactId, version));
   }
@@ -288,16 +298,20 @@ public class IndexingApp implements Closeable {
    * @param root the coordinate of the root node.
    * @return a collection of all terminal artifacts within the hierarchy.
    */
-  public Set<ArtifactInfo> gatherHierarchy(MvnCoordinate root) throws IOException {
+  public Collection<ArtifactInfo> gatherHierarchy(MvnCoordinate root) throws IOException {
 
     validateContext();
     validateRoot(root);
 
-    final Set<ArtifactInfo> totalResults =
-        new TreeSet<>(
-            Comparator.comparing(ArtifactInfo::getGroupId)
-                .thenComparing(ArtifactInfo::getArtifactId)
-                .thenComparing(ArtifactInfo::getVersion));
+    /*
+    // NOTE - the equals() and hashcode() for ArtifactInfo is wrong so Sets are broken
+    //    final Set<ArtifactInfo> totalResults =
+    //        new TreeSet<>(
+    //            Comparator.comparing(ArtifactInfo::getGroupId)
+    //                .thenComparing(ArtifactInfo::getArtifactId)
+    //                .thenComparing(ArtifactInfo::getVersion));
+    */
+    final List<ArtifactInfo> totalResults = new ArrayList<>();
 
     boolean keepGoing = true;
     List<MvnCoordinate> nextUp = new ArrayList<>();
@@ -305,21 +319,21 @@ public class IndexingApp implements Closeable {
 
     do {
 
-      final List<FlatSearchRequest> requests =
+      final List<IteratorSearchRequest> requests =
           nextUp.stream()
               .map(this::createSubmoduleQuery)
-              .map(q -> new FlatSearchRequest(q, indexingContext))
+              .map(q -> new IteratorSearchRequest(q, indexingContext))
               .collect(Collectors.toList());
 
-      final List<FlatSearchResponse> responses = new ArrayList<>(requests.size());
-      for (FlatSearchRequest request : requests) {
-        responses.add(indexer.searchFlat(request));
+      final List<IteratorSearchResponse> responses = new ArrayList<>(requests.size());
+      for (IteratorSearchRequest request : requests) {
+        responses.add(indexer.searchIterator(request));
       }
 
       final List<ArtifactInfo> results =
           responses.stream()
-              .map(FlatSearchResponse::getResults)
-              .flatMap(Set::stream)
+              .map(IteratorSearchResponse::getResults)
+              .flatMap(r -> StreamSupport.stream(r.spliterator(), false))
               .collect(Collectors.toList());
 
       totalResults.addAll(results);
@@ -334,6 +348,11 @@ public class IndexingApp implements Closeable {
               .collect(Collectors.toList());
 
     } while (keepGoing);
+
+    totalResults.sort(
+        Comparator.comparing(ArtifactInfo::getGroupId)
+            .thenComparing(ArtifactInfo::getArtifactId)
+            .thenComparing(ArtifactInfo::getVersion));
 
     return totalResults;
   }
@@ -360,6 +379,11 @@ public class IndexingApp implements Closeable {
         criteria.of(
             criteria.of(MvnOntology.POM_PARENT, MvnCoordinate.write(parent)),
             // criteria.of(MAVEN.ARTIFACT_ID, submoduleArtifactId),
+            //            criteria.of(
+            //                criteria.of(MAVEN.EXTENSION, "pom",
+            // criteria.options().with(Occur.SHOULD)),
+            //                criteria.of(MAVEN.EXTENSION, "jar",
+            // criteria.options().with(Occur.SHOULD))),
             criteria.of(
                 criteria.of(MAVEN.PACKAGING, "pom", criteria.options().with(Occur.SHOULD)),
                 // criteria.of(MAVEN.PACKAGING, "jar", criteria.options().with(Occur.SHOULD)),
@@ -529,7 +553,7 @@ public class IndexingApp implements Closeable {
     final FlatSearchResponse response =
         indexer.searchFlat(new FlatSearchRequest(query, indexingContext));
 
-    lognames(response.getResults());
+    logall(response.getResults());
 
     logline("------------");
     logline("Total: " + response.getTotalHitsCount());
@@ -566,5 +590,19 @@ public class IndexingApp implements Closeable {
     }
     logline();
     logline();
+  }
+
+  private static class ArtifactInfoFixed extends ArtifactInfo {
+    public ArtifactInfoFixed() {}
+
+    public ArtifactInfoFixed(
+        String repository,
+        String groupId,
+        String artifactId,
+        String version,
+        String classifier,
+        String extension) {
+      super(repository, groupId, artifactId, version, classifier, extension);
+    }
   }
 }

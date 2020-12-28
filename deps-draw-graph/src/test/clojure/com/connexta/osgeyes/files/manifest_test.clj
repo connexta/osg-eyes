@@ -1,6 +1,6 @@
-(ns com.connexta.osgeyes.manifest-test
+(ns com.connexta.osgeyes.files.manifest-test
   (:require [clojure.test :refer :all]
-            [com.connexta.osgeyes.manifest :as mf]))
+            [com.connexta.osgeyes.files.manifest :as mf]))
 
 ;; ----------------------------------------------------------------------
 ;; # Manifest Edge Assembly
