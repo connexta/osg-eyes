@@ -62,6 +62,7 @@
         ::Require-Capability
         ::Tool
         ::Service-Version
+        ::Service-Component
         ::Karaf-Commands
         ::Web-ContextPath
         ::Webapp-Context
