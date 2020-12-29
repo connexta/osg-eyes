@@ -13,4 +13,6 @@ public interface MvnOntology {
 
   Field JAR_MANIFEST =
       new Field(null, NAMESPACE, "JAR_MANIFEST", "Plain text content of the jar manifest");
+
+  Field JAR_PACKAGES = new Field(null, NAMESPACE, "JAR_PACKAGES", "Packages contained in a jar");
 }

@@ -144,6 +144,8 @@ public class IndexingApp implements Closeable {
         new MvnHierarchyIndexCreator(), IndexCreator.class, MvnHierarchyIndexCreator.ID);
     plexusContainer.addComponent(
         new JarManifestIndexCreator(), IndexCreator.class, JarManifestIndexCreator.ID);
+    plexusContainer.addComponent(
+        new JarPackagesIndexCreator(), IndexCreator.class, JarPackagesIndexCreator.ID);
   }
 
   /**
@@ -198,13 +200,14 @@ public class IndexingApp implements Closeable {
 
       app.open(repoLocation);
       app.waitForUserToContinue();
+      logline("Searching for security-core-api");
       app.search(
           IndexingApp.getInstance()
               .criteria
               .of(
                   IndexingApp.getInstance().criteria.of(MAVEN.EXTENSION, "jar"),
-                  IndexingApp.getInstance().criteria.of(MAVEN.ARTIFACT_ID, "security-core-api"),
-                  IndexingApp.getInstance().criteria.of(MAVEN.VERSION, "2.19.5")));
+                  app.criteria.of(MAVEN.ARTIFACT_ID, "security-core-api"),
+                  app.criteria.of(MAVEN.VERSION, "2.19.15")));
 
       // OSGI Attributes are using an unsupported indexing model
       // --
@@ -216,10 +219,19 @@ public class IndexingApp implements Closeable {
       // searchGroupedMavenPlugins(indexingContext);
       // waitForUserToContinue();
 
-      Collection<ArtifactInfo> results =
-          app.gatherHierarchy(MvnCoordinate.newInstance("ddf", "ddf", "2.19.5"));
+      logline("Searching jar packages...");
+      app.search(
+          app.criteria.of(
+              app.criteria.of(
+                  MvnOntology.JAR_PACKAGES,
+                  "mil.nga.gsr*",
+                  app.criteria.getOptions().partialInput()),
+              app.criteria.of(MAVEN.VERSION, "16*")));
 
-      lognames(results);
+      Collection<ArtifactInfo> results =
+          app.gatherHierarchy(MvnCoordinate.newInstance("ddf", "ddf", "2.19.15"));
+
+      logNames(results);
       app.waitForUserToContinue();
 
       logline("Shutting down");
@@ -452,6 +464,7 @@ public class IndexingApp implements Closeable {
     indexers.add(plexusContainer.lookup(IndexCreator.class, MIN_INDEX_CREATOR_ID));
     indexers.add(plexusContainer.lookup(IndexCreator.class, MvnHierarchyIndexCreator.ID));
     indexers.add(plexusContainer.lookup(IndexCreator.class, JarManifestIndexCreator.ID));
+    indexers.add(plexusContainer.lookup(IndexCreator.class, JarPackagesIndexCreator.ID));
 
     final Supplier<IndexingContext> contextSupplier =
         () -> {
@@ -535,7 +548,7 @@ public class IndexingApp implements Closeable {
         indexer.searchIterator(
             new IteratorSearchRequest(query, Collections.singletonList(indexingContext), filter));
 
-    lognames(response.getResults());
+    logNames(response.getResults());
 
     logline("------------");
     logline("Total: " + response.getTotalHitsCount());
@@ -553,7 +566,8 @@ public class IndexingApp implements Closeable {
     final FlatSearchResponse response =
         indexer.searchFlat(new FlatSearchRequest(query, indexingContext));
 
-    logall(response.getResults());
+    //    logall(response.getResults());
+    logNamesAndPackages(response.getResults());
 
     logline("------------");
     logline("Total: " + response.getTotalHitsCount());
@@ -568,9 +582,19 @@ public class IndexingApp implements Closeable {
     System.out.println(log);
   }
 
-  private static void lognames(Iterable<ArtifactInfo> artifacts) {
+  private static void logNames(Iterable<ArtifactInfo> artifacts) {
     for (ArtifactInfo artifact : artifacts) {
       logline(artifact.toString());
+    }
+  }
+
+  private static void logNamesAndPackages(Iterable<ArtifactInfo> artifacts) {
+    for (ArtifactInfo artifact : artifacts) {
+      logline(artifact.toString());
+      String packages = artifact.getAttributes().get(MvnOntology.JAR_PACKAGES.getFieldName());
+      if (packages != null) {
+        logline("    " + packages.toString());
+      }
     }
   }
 
