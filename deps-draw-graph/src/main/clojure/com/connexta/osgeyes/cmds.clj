@@ -5,8 +5,9 @@
   end users as part of the application. Refer to the development notes below for details on how
   things work and how they can be extended. Actual function defs begin below the notes section."
 
-  (:require [com.connexta.osgeyes.graph :as graph]
-            [com.connexta.osgeyes.env :as env]
+  (:require [com.connexta.osgeyes.env :as env]
+            [com.connexta.osgeyes.graph :as graph]
+            [com.connexta.osgeyes.options :as opts]
             [com.connexta.osgeyes.files.manifest :as manifest]
             [com.connexta.osgeyes.index.core :as index])
   (:import (java.awt Desktop)
@@ -137,6 +138,20 @@
 ;; # Defaults
 ;;
 
+(def ^:private default-gather
+  "Default aggregator poms for gathering artifacts. For now, just gather nodes from some
+  known good build of DDF."
+  ["mvn:ddf/ddf/2.19.5"])
+
+(def ^:private default-select
+  "Default selection of artifacts from the gathering. The default selection includes
+  only DDF Catalog and Spatial nodes, but no plugins."
+  [:node "ddf/.*" :node ".*catalog.*|.*spatial.*" :node "(?!.*plugin.*$).*"])
+
+;; ----------------------------------------------------------------------
+;; # Maven convenience functions.
+;;
+
 (defn mvn
   "Create a traditional mvn coordinate string of the form: 'mvn:groupId/artifactId/version'
   for use in specifying gather targets."
@@ -161,141 +176,10 @@
        :a (second parts)
        :v (last parts)})))
 
-(def ^:private default-gather
-  "Default aggregator poms for gathering artifacts. For now, just gather nodes from some
-  known good build of DDF."
-  ["mvn:ddf/ddf/2.19.5"])
-
-(def ^:private default-select
-  "Default selection of artifacts from the gathering. The default selection includes
-  only DDF Catalog and Spatial nodes, but no plugins."
-  [:node "ddf/.*" :node ".*catalog.*|.*spatial.*" :node "(?!.*plugin.*$).*"])
-
-(def ^:private filter-terms
-  (set [;; not actually on the data structure - convenience used to imply ":from AND :to"
-        :node
-        ;; actual data structure fields
-        :type
-        :cause
-        :from
-        :to]))
-
-;; ----------------------------------------------------------------------
-;; # Private helpers
-;;
-;; Covers opening the browser & mapping a [:node ".*text.*" ...] filter vector to a predicate.
-;;
-
-(comment
-  "Still need tests for this section"
-  ;; ---
-  "Potentially faster to use subvec instead of partition; refer to Clojure docs"
-  (partition 2 [:a :b :c :d :e :f])
-  "vs"
-  (let [input [:a :b :c :d :e :f]
-        pars (range 2 (inc (count input)) 2)]
-    (map #(subvec input (- % 2) %) pars))
-  ;; ---
-  "Ensure these functions yield predicates that match correctly"
-  (let [p (filter->predicate [:node ".*catalog.*|.*spatial.*"])]
-    (p {:from "A" :to "B" :cause "some.package" :type "misc"})))
-
-(defn- ^:private filter-valid-shape?
-  "Validate the shape of a filter f and provide useful error messages."
-  [f]
-  (cond (empty? f)
-        (throw (IllegalArgumentException.
-                 (str "Filter vector cannot be empty")))
-        (odd? (count f))
-        (throw (IllegalArgumentException.
-                 (str "Expected even filter vector arity, but got vector with arity " (count f))))
-        :default
-        f))
-
-(defn- ^:private filter-pair-valid-types?
-  "Validate the semantics of a filter, now reduced to keyword-string pairs. If valid, will attempt
-  to remap the pairs but with the string compiled into a pattern (regex) object."
-  [[kw re]]
-  (cond (or (not (keyword? kw)) (not (string? re)))
-        (throw (IllegalArgumentException.
-                 (str "Expected keyword-string pairs but got " [kw re])))
-        (not (contains? filter-terms kw))
-        (throw (IllegalArgumentException.
-                 (str "Invalid search term '" kw "', supported terms are " filter-terms)))
-        :default
-        `(~kw ~(re-pattern re))))
-
-(defn- ^:private term-match-fn
-  "Given an edge, return a mapper predicate fn for keyword-pattern (regex) pairs.
-
-  The intent of the returned function is to evaluate an edge to get a
-  mapping function for use on filtering criteria, like so:
-  (map (term-match-fn edge) pairs)
-  "
-  [edge]
-  (fn [[kw pattern]]
-    (if (= :node kw)
-      (let [{term-from :from term-to :to} edge]
-        (and (= term-from (re-matches pattern term-from))
-             (= term-to (re-matches pattern term-to))))
-      (let [term (kw edge)]
-        (= term (re-matches pattern term))))))
-
-(defn- ^:private pred-fn
-  "Given a coll of keyword-pattern (regex) pairs, returns a function that can
-  filter an edge. All regex pairs are AND'd together for the final result."
-  [pairs]
-  (fn [edge]
-    (let [matched? (term-match-fn edge)]
-      (reduce #(and %1 %2) (map matched? pairs)))))
-
-;; Update terminology to be 'selection', not filter
-(defn- ^:private filter->predicate
-  "Transforms f, a filter, to a predicate function that can be used to
-  filter edges: (filter (filter->predicate [:node \"regex\" ...]) edges)"
-  [f]
-  (->> f
-       (#(if (vector? %)
-           %
-           (throw (IllegalArgumentException.
-                    (str "Argument filter must be a vector, but was " %)))))
-       ;; allow nesting for convenience
-       (flatten)
-       (apply vector)
-       ;; validation of final form
-       (filter-valid-shape?)
-       (partition 2)
-       (map filter-pair-valid-types?)
-       (pred-fn)))
-
-(comment
-  (filter->predicate '())
-  (filter->predicate [])
-  (filter->predicate [:term])
-  (filter->predicate [:term "term" "hi"])
-  (filter->predicate [[]])
-  (filter->predicate [[:term]])
-  (filter->predicate [[:term] ["term"]])
-  (filter->predicate [[:term] ["term"] [:term]])
-  (filter->predicate [[:term "one"] ["term"] [:term "two"]])
-
-  ((filter->predicate [:term :term]) {})
-  ((filter->predicate ["term" :term]) {})
-  ((filter->predicate [:term "term"]) {})
-  ((filter->predicate [:from "term"]) {:from "term"})
-
-  ((filter->predicate [:node "term"]) {:from "my-term" :to "your-term"})
-  ((filter->predicate [:node "term"]) {:from "term" :to "your-term"})
-  ((filter->predicate [:node "term"]) {:from "my-term" :to "term"})
-  ((filter->predicate [:node "term"]) {:from "term" :to "term"})
-
-  ((filter->predicate [[:node "one.*" :node ".*two.*"] :cause ".*package.*"])
-   {:from "one-two-three" :to "one-three-two" :cause "some.package"}))
-
 ;; ----------------------------------------------------------------------
 ;; # REFACTORING
 ;;
-;; Temporary.
+;; Temporary. Private helpers.
 ;;
 
 (defn- gen-edges
@@ -353,7 +237,7 @@
          (map #(aggregate-from-m2 (:g %) (:a %) (:v %)))
          (apply merge)
          (gen-edges)
-         (filter (filter->predicate select))
+         (filter (opts/selection->predicate select))
          ;; optionally print duplicate dependencies for each cause
          (#(if cause? % (distinct (map dissoc-cause %))))
          ;; optionally print the type of edge
@@ -377,7 +261,7 @@
        (map #(aggregate-from-m2 (:g %) (:a %) (:v %)))
        (apply merge)
        (gen-edges)
-       (filter (filter->predicate select))
+       (filter (opts/selection->predicate select))
        (graph/gen-html-from-edges)
        (graph/!write-html)
        (!open-file-in-browser)))
