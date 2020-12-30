@@ -8,8 +8,7 @@
   (:require [com.connexta.osgeyes.graph :as graph]
             [com.connexta.osgeyes.env :as env]
             [com.connexta.osgeyes.files.manifest :as manifest]
-            [com.connexta.osgeyes.index.core :as index]
-            [clojure.java.io :as io])
+            [com.connexta.osgeyes.index.core :as index])
   (:import (java.awt Desktop)
            (java.io File)))
 
@@ -172,8 +171,6 @@
   only DDF Catalog and Spatial nodes, but no plugins."
   [:node "ddf/.*" :node ".*catalog.*|.*spatial.*" :node "(?!.*plugin.*$).*"])
 
-(def ^:private cache (atom {}))
-
 (def ^:private filter-terms
   (set [;; not actually on the data structure - convenience used to imply ":from AND :to"
         :node
@@ -310,27 +307,6 @@
          (flatten)
          (distinct))))
 
-(defn- aggregate-from-repo [qual path]
-  (let [is-manifest?
-        (fn [file]
-          (and
-            (= (.getName file) "MANIFEST.MF")
-            (.contains (.getParent file) "/target/classes/META-INF")))
-        get-relevant-file-paths
-        (fn [root-project-path]
-          (->> root-project-path
-               io/file
-               ;; Revisit performance later - consider pulling from file-seq in parallel and not
-               ;; waiting for manifest filtering and path mapping
-               file-seq
-               (filter is-manifest?)
-               (map #(.getPath %))))]
-    (->> (get-relevant-file-paths path)
-         ;; Does Clojure have a "cold start" w.r.t threading? - might be REPL / JVM related
-         (pmap manifest/parse-file)
-         (map #(vector (str qual "/" (::manifest/Bundle-SymbolicName %)) %))
-         (into {}))))
-
 (defn- aggregate-from-m2 [g a v]
   (->> (index/gather-hierarchy g a v)
        (filter #(= (:packaging %) "bundle"))
@@ -345,22 +321,6 @@
 ;; # Public CLI
 ;;
 ;; Commands the user invokes directly.
-;;
-
-(comment
-  "Remember, still need tests for these things"
-  ;; --- Navigation
-  (open-tmp-dir)
-  (open-working-dir)
-  (open-repos-dir)
-  ;; --- Index
-  (index-load)
-  (index-dump)
-  (index-repos "ddf")
-  ;; --- Viz
-  (draw-graph (filter->predicate default-select)))
-
-;;
 ;; Convenience commands for navigating to specific directories.
 ;;
 
@@ -369,35 +329,6 @@
 (defn open-tmp-dir [] (!open-dir (env/resolve-tmp "")))
 (defn open-working-dir [] (!open-dir (env/resolve-subdir "")))
 (defn open-repos-dir [] (!open-dir (env/resolve-repo "")))
-
-(defn index-load
-  ([]
-   (index-load (env/resolve-tmp "viz-index.edn")))
-  ([path]
-   (->> (slurp path)
-        (read-string)
-        (swap! cache #(identity %2))
-        (count)
-        (hash-map :manifests)
-        (do (println "Dependency cache loaded: ")))))
-
-(defn index-dump
-  ([]
-   (index-dump (env/resolve-tmp "viz-index.edn")))
-  ([path]
-   (if (empty? @cache)
-     "No cache exists to dump"
-     (do (spit path (with-out-str (pr @cache)) :create true) (str "Index written to " path)))))
-
-(defn index-repos [& repos]
-  (let [with-output #(do (println (str (count repos) " repositories indexed: ")) %)]
-    (->> repos
-         (pmap #(aggregate-from-m2 % % "2.19.5"))
-         (apply merge)
-         (swap! cache #(identity %2))
-         (count)
-         (hash-map :manifests)
-         (with-output))))
 
 (defn list-edges
   "Lists the edges of a graph in a nicely formatted table.
@@ -462,12 +393,6 @@
   provided named-args map."
   [f named-args]
   (->> (seq named-args) (apply concat) (apply f)))
-
-(comment
-  @cache
-  (index-repos "ddf")
-  (list-edges [:node "ddf/.*" :node ".*catalog.*"] :max 200)
-  (draw-graph [:node "ddf/.*" :node ".*catalog.*"]))
 
 (defn show-args
   [& {:keys [gather select]
