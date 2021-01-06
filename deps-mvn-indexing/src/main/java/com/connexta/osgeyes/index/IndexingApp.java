@@ -1,5 +1,6 @@
 package com.connexta.osgeyes.index;
 
+import com.google.common.collect.Lists;
 import java.io.BufferedReader;
 import java.io.Closeable;
 import java.io.File;
@@ -292,6 +293,15 @@ public class IndexingApp implements Closeable {
             + PROP_USER_REPO;
 
     throw new IllegalStateException(message);
+  }
+
+  public Collection<ArtifactInfo> searchPackages(String packageName) throws IOException {
+    Criteria.Queryable query =
+        criteria.of(MvnOntology.JAR_PACKAGES, packageName, criteria.options().partialInput());
+
+    IteratorSearchRequest request = new IteratorSearchRequest(query.getQuery(), indexingContext);
+    IteratorSearchResponse response = indexer.searchIterator(request);
+    return Lists.newArrayList(response.getResults().iterator());
   }
 
   // Clojure friendly wrapper
