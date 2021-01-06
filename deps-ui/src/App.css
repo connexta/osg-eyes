@@ -1,0 +1,18 @@
+html,
+body,
+#root,
+.App {
+  height: 100%;
+  width: 100%;
+}
+
+.TerminalComponent {
+  position: absolute;
+  margin-left: 5%;
+  padding-left: 1%;
+  padding-right: 1%;
+  padding-bottom: 1%;
+  width: 33%;
+  height: 25%;
+  z-index: 1;
+}
