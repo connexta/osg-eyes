@@ -266,6 +266,25 @@
        (graph/!write-html)
        (!open-file-in-browser)))
 
+(defn export-graph
+  "Exports a graph of edges as GraphML and opens the file in the browser.
+    :gather - vector of mvn coordinates to serve as roots to the artifact trees.
+    :select - selection vector for filtering the graph.
+  The XML file is saved to the user's tmp directory. Run (open-tmp-dir) to find it."
+  [& {:keys [gather select]
+      ;; :as   all
+      :or   {gather default-gather
+             select default-select}}]
+  (->> gather
+       (map gav)
+       (map #(aggregate-from-m2 (:g %) (:a %) (:v %)))
+       (apply merge)
+       (gen-edges)
+       (filter (opts/selection->predicate select))
+       (graph/gen-graphml-from-edges)
+       (graph/!write-graphml)
+       (#(str "Exported to " % (System/lineSeparator) "Call (open-tmp-dir) to navigate there."))))
+
 ;; ----------------------------------------------------------------------
 ;; # Namespace execution samples & support functions.
 ;;
