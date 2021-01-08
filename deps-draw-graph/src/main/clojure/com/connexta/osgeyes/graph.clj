@@ -86,28 +86,85 @@
 ;; <node id="n0"/>
 (defn- create-graphml-node
   "Returns a populated <node/> XML node with the provided id."
-  [id]
-  {:tag   :node
-   :attrs {:id id}})
+  ([id]
+   {:tag   :node
+    :attrs {:id id}})
+  ([id children]
+   (let [xmlnode (create-graphml-node id)]
+     (if (empty? children)
+       xmlnode
+       (assoc xmlnode :content (vec children))))))
 
 ;; <edge source="n0" target="n2"/>
 (defn- create-graphml-edge
   "Returns a populated <edge/> XML node linking the provided node ids."
-  [from-id to-id]
-  {:tag   :edge
-   :attrs {:source from-id :target to-id}})
+  ([from-id to-id]
+   {:tag   :edge
+    :attrs {:source from-id :target to-id}})
+  ([from-id to-id children]
+   (let [xmlnode (create-graphml-edge from-id to-id)]
+     (if (empty? children)
+       xmlnode
+       (assoc xmlnode :content (vec children))))))
 
-(defn- gen-graphml-from-graph
+;; <key id="d1" for="edge" attr.name="weight" attr.type="double"/>
+(defn- create-graphml-key
+  "Returns a populated <key/> XML node with the provided attribute declaration details."
+  [key-name for type]
+  (comment for (any-of :graph :node :edge :all))
+  (comment type (any-of :boolean :int :long :float :double :string))
+  {:tag   :key
+   :attrs {:id        (name key-name)
+           :for       (name for)
+           :attr.name (name key-name)
+           :attr.type (name type)}})
+
+;; <data key="d1">1.0</data>
+(defn- create-graphml-data
+  "Returns a populated <data/> XML node with the provided key and value."
+  [key val]
+  {:tag     :data
+   :attrs   {:key (name key)}
+   :content [val]})
+
+(defn- graphml-node-mapper
+  "Produces a mapping function for creating graphml xml nodes."
+  [graph]
+  (fn [nodeid]
+    (create-graphml-node
+      nodeid
+      (->> nodeid
+           (lm-attr/attrs graph)
+           (seq)
+           (map #(apply create-graphml-data %))))))
+
+(defn- graphml-edge-mapper
+  "Produces a mapping function for creating graphml xml edges."
+  [graph]
+  (fn [edgevec]
+    (let [from (get edgevec 0)
+          to (get edgevec 1)]
+      (create-graphml-edge
+        from
+        to
+        (->> (lm-attr/attrs graph from to)
+             (seq)
+             (map #(apply create-graphml-data %)))))))
+
+(defn gen-graphml-from-graph
   "Transforms a Loom graph into a graphml XML string."
   ;; Add attribute export TODO
   [graph]
-  (let [graphml-nodes (map create-graphml-node (lm-gra/nodes graph))
-        graphml-edges (map #(create-graphml-edge (get % 0) (get % 1)) (lm-gra/edges graph))]
-    (->> (concat graphml-nodes graphml-edges)
-         (create-graphml-graph)
-         (list)
-         (create-graphml-root)
-         (graphml-write))))
+  (let [graphml-nodes (map (graphml-node-mapper graph) (lm-gra/nodes graph))
+        graphml-edges (map (graphml-edge-mapper graph) (lm-gra/edges graph))
+        graphml-graph (list (create-graphml-graph (concat graphml-nodes graphml-edges)))
+        graphml-keys (list (create-graphml-key :group-id :node :string)
+                           (create-graphml-key :artifact-id :node :string)
+                           (create-graphml-key :version :node :string)
+                           (create-graphml-key :packaging :node :string)
+                           (create-graphml-key :type :edge :string)
+                           (create-graphml-key :cause :edge :string))]
+    (->> (concat graphml-keys graphml-graph) (create-graphml-root) (graphml-write))))
 
 ;; ----------------------------------------------------------------------
 ;; # Graphs -> HTML
@@ -121,7 +178,8 @@
       (lm-attr/add-attr :a :color "purple")
       (lm-attr/add-attr [:a :c] :color "black")
       (lm-attr/add-attr :b :type "bundle")
-      (lm-attr/attrs :b)))
+      #_(lm-attr/attrs :b)
+      (gen-graphml-from-graph)))
 
 (defn- json-for-nodes [graph]
   (->> graph

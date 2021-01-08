@@ -377,9 +377,11 @@
        (map gav)
        (map #(aggregate-with-all (:g %) (:a %) (:v %)))
        (apply merge)
-       (artifacts->edges)
-       (filter (opts/selection->predicate select))
-       (graph/gen-graphml-from-edges)
+       #_(artifacts->edges)
+       (create-graph-with-attrs)
+       ;; Fix filtering later TODO
+       #_(filter (opts/selection->predicate select))
+       (graph/gen-graphml-from-graph)
        (graph/!write-graphml)
        (#(str "Exported to " % (System/lineSeparator) "Call (open-tmp-dir) to navigate there."))))
 
