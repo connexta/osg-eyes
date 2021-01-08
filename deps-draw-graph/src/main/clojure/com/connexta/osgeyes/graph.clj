@@ -125,7 +125,7 @@
   [key val]
   {:tag     :data
    :attrs   {:key (name key)}
-   :content [val]})
+   :content [(if (keyword? val) (name val) val)]})
 
 (defn- graphml-node-mapper
   "Produces a mapping function for creating graphml xml nodes."
@@ -153,17 +153,20 @@
 
 (defn gen-graphml-from-graph
   "Transforms a Loom graph into a graphml XML string."
-  ;; Add attribute export TODO
   [graph]
   (let [graphml-nodes (map (graphml-node-mapper graph) (lm-gra/nodes graph))
         graphml-edges (map (graphml-edge-mapper graph) (lm-gra/edges graph))
         graphml-graph (list (create-graphml-graph (concat graphml-nodes graphml-edges)))
-        graphml-keys (list (create-graphml-key :group-id :node :string)
-                           (create-graphml-key :artifact-id :node :string)
-                           (create-graphml-key :version :node :string)
-                           (create-graphml-key :packaging :node :string)
-                           (create-graphml-key :type :edge :string)
-                           (create-graphml-key :cause :edge :string))]
+        graphml-keys (list
+                       ;; nodes
+                       (create-graphml-key :group-id :node :string)
+                       (create-graphml-key :artifact-id :node :string)
+                       (create-graphml-key :version :node :string)
+                       (create-graphml-key :packaging :node :string)
+                       (create-graphml-key :category :node :string)
+                       ;; edges
+                       (create-graphml-key :type :edge :string)
+                       (create-graphml-key :cause :edge :string))]
     (->> (concat graphml-keys graphml-graph) (create-graphml-root) (graphml-write))))
 
 ;; ----------------------------------------------------------------------

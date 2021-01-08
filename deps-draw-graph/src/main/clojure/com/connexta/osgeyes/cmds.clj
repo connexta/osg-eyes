@@ -10,16 +10,20 @@
             [com.connexta.osgeyes.options :as opts]
             [com.connexta.osgeyes.files.manifest :as manifest]
             [com.connexta.osgeyes.index.core :as index]
+            [clojure.string :as string]
             [loom.graph :as lm-gra]
             [loom.attr :as lm-attr])
   (:import (java.awt Desktop)
            (java.io File)))
 
-;; ----------------------------------------------------------------------
+;; ----------------------------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------------------------
 ;; # Development Notes
 ;;
 ;; Notes about data structures, new functions, and opportunities for planning
 ;; ahead future capability iterations.
+;;
+;; ----------------------------------------------------------------------------------------------
 ;;
 
 (comment
@@ -136,8 +140,10 @@
 
   (comment))
 
-;; ----------------------------------------------------------------------
-;; # Defaults
+;;
+;; ----------------------------------------------------------------------------------------------
+;; Defaults
+;; ----------------------------------------------------------------------------------------------
 ;;
 
 (def ^:private default-gather
@@ -150,8 +156,10 @@
   only DDF Catalog and Spatial nodes, but no plugins."
   [:node "ddf/.*" :node ".*catalog.*|.*spatial.*" :node "(?!.*plugin.*$).*"])
 
-;; ----------------------------------------------------------------------
-;; # Maven convenience functions.
+;;
+;; ----------------------------------------------------------------------------------------------
+;; Maven convenience functions
+;; ----------------------------------------------------------------------------------------------
 ;;
 
 (defn mvn
@@ -178,10 +186,12 @@
        :a (second parts)
        :v (last parts)})))
 
-;; ----------------------------------------------------------------------
+;; ----------------------------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------------------------
 ;; # REFACTORING
 ;;
 ;; Temporary. Private helpers.
+;; ----------------------------------------------------------------------------------------------
 ;;
 (comment
   "Data structure reference"
@@ -217,7 +227,9 @@
          (distinct))))
 
 ;;
+;; ----------------------------------------------------------------------------------------------
 ;; New aggregation chain that preserves the original data for as long as possible.
+;; ----------------------------------------------------------------------------------------------
 ;;
 
 (defn- apply-manifest [artifact]
@@ -234,7 +246,90 @@
        (into {})))
 
 ;;
+;; ----------------------------------------------------------------------------------------------
+;; Categorization attribute.
+;; ----------------------------------------------------------------------------------------------
+;;
+
+(def ^:private categories
+  "Map of category names to the criteria that defines them."
+  {:api                (list #".*api.*")
+   :security           (list #".*security.*")
+   :solr               (list #".*solr.*")
+   :admin              (list #".*admin.*")
+   :transformer        (list #".*transformer.*")
+   :spatial-csw        (list #".*spatial.*" #".*csw.*")
+   :spatial-geocoding  (list #".*spatial.*" #".*geocoding.*")
+   :spatial-kml        (list #".*spatial.*" #".*kml.*")
+   :spatial-ogc        (list #".*spatial.*" #".*ogc.*")
+   :spatial-wfs        (list #".*spatial.*" #".*wfs.*")
+   :spatial            (list #".*spatial.*")
+   :catalog-opensearch (list #".*catalog.*" #".*opensearch.*")
+   :catalog-rest       (list #".*catalog.*" #".*rest.*")
+   :catalog-validator  (list #".*catalog.*" #".*validator.*")
+   :catalog-plugins    (list #".*catalog.*" #".*plugin.*")
+   :catalog            (list #".*catalog.*")
+   :action             (list #".*action.*")
+   :metrics            (list #".*metrics.*|.*micrometer.*")
+   :mime               (list #".*mime.*")
+   :platform           (list #".*platform.*")})
+
+(def ^:private category-keys
+  "Vector of category names in the order of their precedence"
+  [:api
+   :security
+   :solr
+   :admin
+   :transformer
+   :spatial-csw
+   :spatial-geocoding
+   :spatial-kml
+   :spatial-ogc
+   :spatial-wfs
+   :spatial
+   :catalog-opensearch
+   :catalog-rest
+   :catalog-validator
+   :catalog-plugins
+   :catalog
+   :action
+   :metrics
+   :mime
+   :platform])
+
+(def ^:private categories-sorted
+  (let [priorities (range 0 (count category-keys))
+        key-priority (->> (interleave category-keys priorities)
+                          (partition 2)
+                          (map vec)
+                          (into {}))]
+    (into (sorted-map-by #(compare (key-priority %1) (key-priority %2))) categories)))
+
+(defn- categorize
+  "Categorizes the provided input string."
+  [str]
+  (loop [cats (seq categories-sorted)]
+    (if (empty? cats)
+      :none
+      (let [next (first cats)
+            match? (reduce #(and %1 %2) (map #(boolean (re-matches % str)) (last next)))]
+        (if match?
+          (first next)
+          (recur (rest cats)))))))
+
+(defn- add-category
+  [graph qualname artifact]
+  (let [id (get-in artifact [:maven :artifact-id])]
+    (lm-attr/add-attr graph qualname :category (categorize id))))
+
+(comment
+  (categorize "aimalr")
+  (comment))
+
+;;
+;; ----------------------------------------------------------------------------------------------
 ;; Creates a Loom graph with artifact metadata embedded into the nodes and edges as attributes.
+;; ----------------------------------------------------------------------------------------------
 ;;
 
 (defn- add-disconnected-nodes-to-graph
@@ -251,14 +346,14 @@
   ;; the node/edge doesn't exist so can't be used to tweak attributes
   (when (not (contains? (lm-gra/nodes graph) qualname))
     (throw (IllegalArgumentException. (str "Could not find " qualname " in nodes"))))
-  (let [add-attr-frm-mvn (fn [g node key art]
-                           (lm-attr/add-attr g node key (get-in art [:maven key])))]
+  (let [add-mvn-attr (fn [g node art key]
+                       (lm-attr/add-attr g node key (get-in art [:maven key])))]
     (-> graph
-        ;; Add categorization later TODO
-        (add-attr-frm-mvn qualname :group-id artifact)
-        (add-attr-frm-mvn qualname :artifact-id artifact)
-        (add-attr-frm-mvn qualname :version artifact)
-        (add-attr-frm-mvn qualname :packaging artifact))))
+        (add-category qualname artifact)
+        (add-mvn-attr qualname artifact :group-id)
+        (add-mvn-attr qualname artifact :artifact-id)
+        (add-mvn-attr qualname artifact :version)
+        (add-mvn-attr qualname artifact :packaging))))
 
 (defn- with-edge-attrs
   "Reducing function that adds edge metadata to graph edge attributes."
@@ -286,7 +381,9 @@
   (comment))
 
 ;;
+;; ----------------------------------------------------------------------------------------------
 ;; Original aggregation chain that collapses the data down to just manifests.
+;; ----------------------------------------------------------------------------------------------
 ;;
 
 (defn- aggregate-from-m2 [g a v]
@@ -299,11 +396,13 @@
        (map #(vector (str a "/" (::manifest/Bundle-SymbolicName %)) %))
        (into {})))
 
-;; ----------------------------------------------------------------------
+;; ----------------------------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------------------------
 ;; # Public CLI
 ;;
 ;; Commands the user invokes directly.
 ;; Convenience commands for navigating to specific directories.
+;; ----------------------------------------------------------------------------------------------
 ;;
 
 (defn- !open-file-in-browser [path] (.browse (Desktop/getDesktop) (.toURI (File. ^String path))))
@@ -390,10 +489,12 @@
   (draw-graph)
   (open-tmp-dir))
 
-;; ----------------------------------------------------------------------
+;; ----------------------------------------------------------------------------------------------
+;; ----------------------------------------------------------------------------------------------
 ;; # Namespace execution samples & support functions.
 ;;
 ;; Pre-defined evaluation samples for the above.
+;; ----------------------------------------------------------------------------------------------
 ;;
 
 (defn invoke-with
