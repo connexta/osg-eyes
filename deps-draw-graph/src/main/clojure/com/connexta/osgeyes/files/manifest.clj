@@ -101,10 +101,9 @@
   (mapcat (fn [[k v]] (map vector (repeat k) v)) m))
 
 (defn- extract-attr
-  ;; Note! Locale currently assumed to be manifest exclusively, not iteration of data sources
-  "Returns a simplified, unnested node->attribute map for the specified locale attribute."
-  [attr locale]
-  (into {} (map (fn [[k v]] [k (get v attr)]) locale)))
+  "Returns a simplified, unnested node->attribute map for the specified map attribute."
+  [attr key-map-pairs]
+  (into {} (map (fn [[k v]] [k (get v attr)]) key-map-pairs)))
 
 (defn- import-export-maps->edges
   "Generate dependency graph edges by matching imports->exports."
@@ -127,21 +126,22 @@
          ;; the importer depends on the exporter
          (map #(hash-map :from (get % 0) :to (get % 1) :cause (get % 2) :type type)))))
 
-(defn locale->edges
-  "Given a full scan of a locale instance, pull out the pieces of data the manifest can
+(defn artifacts->edges
+  "Given a collection of parsed manifests, pull out the pieces of data the manifest can
   operate on and generate a normalized list of dependency graph edges. The definition
   of an edge is:
   {:from \"qual/node\" :to \"qual/node\" :cause \"thing.that.caused.connection\" :type \"type\"}."
-  [locale]
-  (flatten
-    [(import-export-maps->edges
-       "bundle/package"
-       (extract-attr ::Import-Package locale)
-       (extract-attr ::Export-Package locale))
-     (import-export-maps->edges
-       "bundle/service"
-       (extract-attr ::Import-Service locale)
-       (extract-attr ::Export-Service locale))]))
+  [artifacts]
+  (let [manifests (map #(vector (first %) (:manifest (last %))) artifacts)]
+    (flatten
+      [(import-export-maps->edges
+         "bundle/package"
+         (extract-attr ::Import-Package manifests)
+         (extract-attr ::Export-Package manifests))
+       (import-export-maps->edges
+         "bundle/service"
+         (extract-attr ::Import-Service manifests)
+         (extract-attr ::Export-Service manifests))])))
 
 ;; ----------------------------------------------------------------------
 ;; # Manifest Attribute Parsing

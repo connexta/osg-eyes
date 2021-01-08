@@ -99,6 +99,7 @@
 
 (defn- gen-graphml-from-graph
   "Transforms a Loom graph into a graphml XML string."
+  ;; Add attribute export TODO
   [graph]
   (let [graphml-nodes (map create-graphml-node (lm-gra/nodes graph))
         graphml-edges (map #(create-graphml-edge (get % 0) (get % 1)) (lm-gra/edges graph))]

@@ -9,7 +9,9 @@
             [com.connexta.osgeyes.graph :as graph]
             [com.connexta.osgeyes.options :as opts]
             [com.connexta.osgeyes.files.manifest :as manifest]
-            [com.connexta.osgeyes.index.core :as index])
+            [com.connexta.osgeyes.index.core :as index]
+            [loom.graph :as lm-gra]
+            [loom.attr :as lm-attr])
   (:import (java.awt Desktop)
            (java.io File)))
 
@@ -181,15 +183,111 @@
 ;;
 ;; Temporary. Private helpers.
 ;;
+(comment
+  "Data structure reference"
 
-(defn- gen-edges
-  "Given a locale, returns a list of edges."
-  [locale]
-  (let [connectors [manifest/locale->edges]]
+  artifact
+  {:maven    {#_"artifact-info from indexer module"}
+   :manifest {#_"manifest attributes from manifest parser"}}
+
+  qualname
+  ;; qualified name of an artifact
+  "~qualifier~/~artifact-name~"
+  ;; currently it's safe to assume...
+  "artifactId-of-root/bundle-symbolic-name"
+
+  artifact-map
+  {qualname1 artifact1
+   qualname2 artifact2}
+
+  edge
+  {:to "" :from "" :cause "" :type ""}
+
+  (comment))
+
+(defn- artifacts->edges
+  ;; Next - when this is called, cache results, don't map TODO
+  ;; Only map when original artifact map is available to pull data from for graph attrs
+  "Given a collection of artifacts, returns a list of edges."
+  [artifact-map]
+  (let [connectors [manifest/artifacts->edges]]
     (->> connectors
-         (map #(% locale))
+         (map #(% artifact-map))
          (flatten)
          (distinct))))
+
+;;
+;; New aggregation chain that preserves the original data for as long as possible.
+;;
+
+(defn- apply-manifest [artifact]
+  (assoc artifact :manifest
+                  (manifest/parse-content (get-in artifact [:maven :attrs "JAR_MANIFEST"]))))
+
+(defn- aggregate-with-all [g a v]
+  (->> (index/gather-hierarchy g a v)
+       (filter #(= (:packaging %) "bundle"))
+       (filter #(= (:file-ext %) "jar"))
+       (map #(hash-map :maven %))
+       (map apply-manifest)
+       (map #(vector (str a "/" (get-in % [:manifest ::manifest/Bundle-SymbolicName])) %))
+       (into {})))
+
+;;
+;; Creates a Loom graph with artifact metadata embedded into the nodes and edges as attributes.
+;;
+
+(defn- add-disconnected-nodes-to-graph
+  "Reducing function that ensures any node not inferrable from edges is still apart of the graph."
+  [graph [qualname artifact]]
+  (if (contains? (lm-gra/nodes graph) qualname)
+    graph
+    (lm-gra/add-nodes graph qualname)))
+
+(defn- with-node-attrs
+  "Reducing function that adds maven artifact metadata to graph node attributes."
+  [graph [qualname artifact]]
+  ;; If Loom complains about a 'string' not satisfying the 'Edge' protocol, it just means
+  ;; the node/edge doesn't exist so can't be used to tweak attributes
+  (when (not (contains? (lm-gra/nodes graph) qualname))
+    (throw (IllegalArgumentException. (str "Could not find " qualname " in nodes"))))
+  (let [add-attr-frm-mvn (fn [g node key art]
+                           (lm-attr/add-attr g node key (get-in art [:maven key])))]
+    (-> graph
+        ;; Add categorization later TODO
+        (add-attr-frm-mvn qualname :group-id artifact)
+        (add-attr-frm-mvn qualname :artifact-id artifact)
+        (add-attr-frm-mvn qualname :version artifact)
+        (add-attr-frm-mvn qualname :packaging artifact))))
+
+(defn- with-edge-attrs
+  "Reducing function that adds edge metadata to graph edge attributes."
+  [graph edge]
+  (let [from (:from edge)
+        to (:to edge)]
+    (-> graph
+        (lm-attr/add-attr from to :cause (:cause edge))
+        (lm-attr/add-attr from to :type (:type edge)))))
+
+(defn- create-graph-with-attrs
+  "Creates a graph with original metadata preserved as graph attributes."
+  [artifact-map]
+  (let [edges (artifacts->edges artifact-map)
+        graph (->> edges (map #(vector (:from %) (:to %))) (apply lm-gra/digraph))
+        pairs (seq artifact-map)]
+    (as-> graph g
+          (reduce add-disconnected-nodes-to-graph g pairs)
+          (reduce with-node-attrs g pairs)
+          (reduce with-edge-attrs g edges))))
+
+(comment
+  (create-graph-with-attrs
+    (aggregate-with-all "ddf" "ddf" "2.19.5"))
+  (comment))
+
+;;
+;; Original aggregation chain that collapses the data down to just manifests.
+;;
 
 (defn- aggregate-from-m2 [g a v]
   (->> (index/gather-hierarchy g a v)
@@ -234,9 +332,9 @@
         dissoc-type #(dissoc % :type)]
     (->> gather
          (map gav)
-         (map #(aggregate-from-m2 (:g %) (:a %) (:v %)))
+         (map #(aggregate-with-all (:g %) (:a %) (:v %)))
          (apply merge)
-         (gen-edges)
+         (artifacts->edges)
          (filter (opts/selection->predicate select))
          ;; optionally print duplicate dependencies for each cause
          (#(if cause? % (distinct (map dissoc-cause %))))
@@ -258,9 +356,9 @@
              select default-select}}]
   (->> gather
        (map gav)
-       (map #(aggregate-from-m2 (:g %) (:a %) (:v %)))
+       (map #(aggregate-with-all (:g %) (:a %) (:v %)))
        (apply merge)
-       (gen-edges)
+       (artifacts->edges)
        (filter (opts/selection->predicate select))
        (graph/gen-html-from-edges)
        (graph/!write-html)
@@ -277,13 +375,18 @@
              select default-select}}]
   (->> gather
        (map gav)
-       (map #(aggregate-from-m2 (:g %) (:a %) (:v %)))
+       (map #(aggregate-with-all (:g %) (:a %) (:v %)))
        (apply merge)
-       (gen-edges)
+       (artifacts->edges)
        (filter (opts/selection->predicate select))
        (graph/gen-graphml-from-edges)
        (graph/!write-graphml)
        (#(str "Exported to " % (System/lineSeparator) "Call (open-tmp-dir) to navigate there."))))
+
+(comment
+  (export-graph :select [:node "ddf/.*"])
+  (draw-graph)
+  (open-tmp-dir))
 
 ;; ----------------------------------------------------------------------
 ;; # Namespace execution samples & support functions.
@@ -305,6 +408,8 @@
 
 (comment
   default-gather
+  ;; Invocation & mapping
+  (invoke-with draw-graph {:select [] :gather [] :extra 0})
   (show-args)
   (show-args :gather [(mvn "ddf" "2.23.1")])
   ;; Testing
@@ -325,11 +430,10 @@
   ;; Artifact aggregation from maven
   (index/gather-hierarchy "ddf" "ddf" "2.19.5")
   (aggregate-from-m2 "ddf" "ddf" "2.19.5")
+  (aggregate-with-all "ddf" "ddf" "2.19.5")
   ;; Composition ideas
   (draw-graph :select [])
   (draw-graph-with :select [])
   (draw-graph-with {:select []})
   (draw-graph (with :select []))
-  (draw-graph (with-opts {:select []}))
-  ;; Invocation & mapping
-  (invoke-with new-draw-graph {:select [] :gather [] :extra 0}))
+  (draw-graph (with-opts {:select []})))
