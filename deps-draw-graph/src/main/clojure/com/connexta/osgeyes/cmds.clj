@@ -149,7 +149,8 @@
 (def ^:private default-gather
   "Default aggregator poms for gathering artifacts. For now, just gather nodes from some
   known good build of DDF."
-  ["mvn:ddf/ddf/2.19.5"])
+  #_["mvn:ddf/ddf/2.19.5"]
+  ["mvn:ddf/ddf/2.19.14"])
 
 (def ^:private default-select
   "Default selection of artifacts from the gathering. The default selection includes
@@ -390,7 +391,7 @@
   (->> (index/gather-hierarchy g a v)
        (filter #(= (:packaging %) "bundle"))
        (filter #(= (:file-ext %) "jar"))
-       ;; Add keyword mapping / insolation for mvn-indexer attributes TODO
+       ;; Add keyword mapping / insulation for mvn-indexer attributes TODO
        (map #(get-in % [:attrs "JAR_MANIFEST"]))
        (map #(manifest/parse-content %))
        (map #(vector (str a "/" (::manifest/Bundle-SymbolicName %)) %))
@@ -486,6 +487,7 @@
 
 (comment
   (export-graph :select [:node "ddf/.*"])
+  (list-edges)
   (draw-graph)
   (open-tmp-dir))
 

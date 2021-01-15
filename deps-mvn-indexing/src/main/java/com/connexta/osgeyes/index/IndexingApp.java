@@ -182,6 +182,15 @@ public class IndexingApp implements Closeable {
     }
   }
 
+  /**
+   * Accessor for building criteria, invokable by Clojure.
+   *
+   * @return the criteria object.
+   */
+  public Criteria getCriteria() {
+    return criteria;
+  }
+
   public static void main(String[] args) throws Exception {
     try (final IndexingApp app = IndexingApp.getInstance()) {
       logline("----------------------------------------------------------------------------------");
@@ -295,16 +304,48 @@ public class IndexingApp implements Closeable {
     throw new IllegalStateException(message);
   }
 
+  /**
+   * Provides a generic way to search a Maven repository for artifacts using a full criteria query.
+   *
+   * @param criteria the query.
+   * @return artifacts that match the query criteria.
+   * @throws IOException if an error occurs during search.
+   */
+  public Collection<ArtifactInfo> searchArtifacts(Criteria.Queryable criteria) throws IOException {
+    validateContext();
+    IteratorSearchRequest request = new IteratorSearchRequest(criteria.getQuery(), indexingContext);
+    IteratorSearchResponse response = indexer.searchIterator(request);
+    return Lists.newArrayList(response.getResults().iterator());
+  }
+
+  /**
+   * Provides a way to search for Java packages within artifacts. Wildcards (*) supported at the end
+   * of the package search string. Adding a wildcard in the middle of the string works in some cases
+   * but is not yet fully supported.
+   *
+   * @param packageName the package prefix to search for.
+   * @return artifacts that have a non-empty package matching the provided string.
+   * @throws IOException if an error occurs during search.
+   */
   public Collection<ArtifactInfo> searchPackages(String packageName) throws IOException {
+    validateContext();
     Criteria.Queryable query =
         criteria.of(MvnOntology.JAR_PACKAGES, packageName, criteria.options().partialInput());
-
     IteratorSearchRequest request = new IteratorSearchRequest(query.getQuery(), indexingContext);
     IteratorSearchResponse response = indexer.searchIterator(request);
     return Lists.newArrayList(response.getResults().iterator());
   }
 
-  // Clojure friendly wrapper
+  /**
+   * Clojure-friendly wrapper for {@link #gatherHierarchy(MvnCoordinate)}.
+   *
+   * @see #gatherHierarchy(MvnCoordinate)
+   * @param groupId groupId of the root node.
+   * @param artifactId artifactId of the root node.
+   * @param version version of the root node.
+   * @return a collection of all terminal artifacts within the hierarchy.
+   * @throws IOException if an error occurs during search.
+   */
   public Collection<ArtifactInfo> gatherHierarchy(String groupId, String artifactId, String version)
       throws IOException {
     return gatherHierarchy(MvnCoordinate.newInstance(groupId, artifactId, version));
@@ -319,6 +360,7 @@ public class IndexingApp implements Closeable {
    *
    * @param root the coordinate of the root node.
    * @return a collection of all terminal artifacts within the hierarchy.
+   * @throws IOException if an error occurs during search.
    */
   public Collection<ArtifactInfo> gatherHierarchy(MvnCoordinate root) throws IOException {
 
