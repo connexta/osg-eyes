@@ -56,7 +56,11 @@ public class Criteria {
   }
 
   public Queryable of(Queryable... criteria) {
-    return new Compound(Arrays.asList(criteria), indexer);
+    return new Compound(new Options(), Arrays.asList(criteria), indexer);
+  }
+
+  public Queryable of(Options options, Queryable... criteria) {
+    return new Compound(options, Arrays.asList(criteria), indexer);
   }
 
   public Options options() {
@@ -111,8 +115,8 @@ public class Criteria {
 
     private final List<Queryable> criteria;
 
-    public Compound(List<Queryable> criteria, Indexer indexer) {
-      super(new Options(), indexer);
+    public Compound(Options options, List<Queryable> criteria, Indexer indexer) {
+      super(options, indexer);
       if (criteria == null || criteria.isEmpty()) {
         throw new IllegalArgumentException("Null or empty criteria is not supported");
       }

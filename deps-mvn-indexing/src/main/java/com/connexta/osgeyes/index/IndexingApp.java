@@ -442,17 +442,16 @@ public class IndexingApp implements Closeable {
     final Criteria.Queryable queryable =
         criteria.of(
             criteria.of(MvnOntology.POM_PARENT, MvnCoordinate.write(parent)),
-            // criteria.of(MAVEN.ARTIFACT_ID, submoduleArtifactId),
-            //            criteria.of(
-            //                criteria.of(MAVEN.EXTENSION, "pom",
-            // criteria.options().with(Occur.SHOULD)),
-            //                criteria.of(MAVEN.EXTENSION, "jar",
-            // criteria.options().with(Occur.SHOULD))),
             criteria.of(
                 criteria.of(MAVEN.PACKAGING, "pom", criteria.options().with(Occur.SHOULD)),
-                // criteria.of(MAVEN.PACKAGING, "jar", criteria.options().with(Occur.SHOULD)),
-                criteria.of(MAVEN.PACKAGING, "bundle", criteria.options().with(Occur.SHOULD))));
-    // logline("Building query " + queryable.toString());
+                criteria.of(
+                    criteria.options().with(Occur.SHOULD),
+                    criteria.of(MAVEN.PACKAGING, "jar"),
+                    criteria.of(MAVEN.EXTENSION, "jar")),
+                criteria.of(
+                    criteria.options().with(Occur.SHOULD),
+                    criteria.of(MAVEN.PACKAGING, "bundle"),
+                    criteria.of(MAVEN.EXTENSION, "jar"))));
     return queryable.getQuery();
   }
 
