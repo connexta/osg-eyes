@@ -23,6 +23,7 @@ import java.util.stream.StreamSupport;
 import javax.annotation.Nullable;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.Query;
+import org.apache.maven.index.ArtifactContextProducer;
 import org.apache.maven.index.ArtifactInfo;
 import org.apache.maven.index.ArtifactInfoFilter;
 import org.apache.maven.index.ArtifactScanningListener;
@@ -34,7 +35,6 @@ import org.apache.maven.index.IndexerEngine;
 import org.apache.maven.index.IteratorSearchRequest;
 import org.apache.maven.index.IteratorSearchResponse;
 import org.apache.maven.index.MAVEN;
-import org.apache.maven.index.Scanner;
 import org.apache.maven.index.ScanningRequest;
 import org.apache.maven.index.ScanningResult;
 import org.apache.maven.index.context.ExistingLuceneIndexMismatchException;
@@ -90,7 +90,7 @@ public class IndexingApp implements Closeable {
 
   private final IndexerEngine indexerEngine;
 
-  private final Scanner repositoryScanner;
+  private final ArtifactContextProducer contextProducer;
 
   // Next up we're going to separate this as part of a standalone app
   // also move output to logger instead of std out
@@ -136,7 +136,7 @@ public class IndexingApp implements Closeable {
     this.plexusContainer = new DefaultPlexusContainer(config);
     this.indexer = plexusContainer.lookup(Indexer.class);
     this.indexerEngine = plexusContainer.lookup(IndexerEngine.class);
-    this.repositoryScanner = plexusContainer.lookup(Scanner.class);
+    this.contextProducer = plexusContainer.lookup(ArtifactContextProducer.class);
     this.consoleIn = new BufferedReader(new InputStreamReader(System.in));
 
     this.criteria = new Criteria(indexer);
@@ -576,8 +576,9 @@ public class IndexingApp implements Closeable {
 
     final ArtifactScanningListener listener =
         new DefaultScannerListener(indexingContext, indexerEngine, false, null);
+    final RepositoryReader repositoryReader = new RepositoryReader(contextProducer);
     final ScanningRequest scanningRequest = new ScanningRequest(indexingContext, listener);
-    final ScanningResult result = repositoryScanner.scan(scanningRequest);
+    final ScanningResult result = repositoryReader.scan(scanningRequest);
 
     logline("Scan has finished");
     logline("Total files: " + result.getTotalFiles());
@@ -666,19 +667,5 @@ public class IndexingApp implements Closeable {
     }
     logline();
     logline();
-  }
-
-  private static class ArtifactInfoFixed extends ArtifactInfo {
-    public ArtifactInfoFixed() {}
-
-    public ArtifactInfoFixed(
-        String repository,
-        String groupId,
-        String artifactId,
-        String version,
-        String classifier,
-        String extension) {
-      super(repository, groupId, artifactId, version, classifier, extension);
-    }
   }
 }

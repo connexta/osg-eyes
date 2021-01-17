@@ -200,6 +200,27 @@
   (filter #(not (or (:classifier %) (:file-name %) (:path %))) (gather-hierarchy "ddf" "2.19.5"))
 
   ;;
+  ;; Verify these on both sides of the fix
+  (open-indexer!)
+  ;; 7
+  (count (query-mvn
+           (lookfor-all
+             (lookfor :artifact-id "pax-web*")
+             (lookfor :file-ext "xml"))))
+  ;; 31
+  (count (query-mvn
+           (lookfor :file-ext "cfg")))
+  ;; 2
+  (count (query-mvn
+           (lookfor :file-ext "yml")))
+  ;; 7
+  (count (query-mvn
+           (lookfor :file-ext "tar.gz")))
+  ;; 1068 - these should be zero
+  (count (query-mvn
+           (lookfor :file-ext "pom.lastUpdated")))
+
+  ;;
   ;; Why are so many duplicate artifacts getting returned for ddf 2.19.14? TODO
   ;; Using distinct works but can't tell how maven is treating them as separate
   ;; Check classifier or other properties might be an indexer-core bug
