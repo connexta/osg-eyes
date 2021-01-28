@@ -252,70 +252,60 @@
 ;; ----------------------------------------------------------------------------------------------
 ;;
 
+;; @formatter:off
 (def ^:private categories
-  "Map of category names to the criteria that defines them."
-  {:api                (list #".*api.*")
-   :security           (list #".*security.*")
-   :solr               (list #".*solr.*")
-   :admin              (list #".*admin.*")
-   :transformer        (list #".*transformer.*")
-   :spatial-csw        (list #".*spatial.*" #".*csw.*")
-   :spatial-geocoding  (list #".*spatial.*" #".*geocoding.*")
-   :spatial-kml        (list #".*spatial.*" #".*kml.*")
-   :spatial-ogc        (list #".*spatial.*" #".*ogc.*")
-   :spatial-wfs        (list #".*spatial.*" #".*wfs.*")
-   :spatial            (list #".*spatial.*")
-   :catalog-opensearch (list #".*catalog.*" #".*opensearch.*")
-   :catalog-rest       (list #".*catalog.*" #".*rest.*")
-   :catalog-validator  (list #".*catalog.*" #".*validator.*")
-   :catalog-plugins    (list #".*catalog.*" #".*plugin.*")
-   :catalog            (list #".*catalog.*")
-   :action             (list #".*action.*")
-   :metrics            (list #".*metrics.*|.*micrometer.*")
-   :mime               (list #".*mime.*")
-   :platform           (list #".*platform.*")})
-
-(def ^:private category-keys
-  "Vector of category names in the order of their precedence"
-  [:api
-   :security
-   :solr
-   :admin
-   :transformer
-   :spatial-csw
-   :spatial-geocoding
-   :spatial-kml
-   :spatial-ogc
-   :spatial-wfs
-   :spatial
-   :catalog-opensearch
-   :catalog-rest
-   :catalog-validator
-   :catalog-plugins
-   :catalog
-   :action
-   :metrics
-   :mime
-   :platform])
-
-(def ^:private categories-sorted
-  (let [priorities (range 0 (count category-keys))
-        key-priority (->> (interleave category-keys priorities)
-                          (partition 2)
-                          (map vec)
-                          (into {}))]
-    (into (sorted-map-by #(compare (key-priority %1) (key-priority %2))) categories)))
+  "Category names and the criteria that defines them, in the order that they should be applied."
+  (vector
+    [:security-claims    #".*security.*" #".*claims.*"]
+    [:security-encrypt   #".*security.*" #".*encryption.*"]
+    [:security-expand    #".*security.*" #".*expansion.*"]
+    [:security-filter    #".*security.*" #".*filter.*"]
+    [:security-handler   #".*security.*" #".*handler.*"]
+    [:security-intercept #".*security.*" #".*interceptor.*"]
+    [:security-policy    #".*security.*" #".*policy.*"]
+    [:security-realm     #".*security.*" #".*realm.*"]
+    [:security-rest      #".*security.*" #".*rest.*"]
+    [:security-saml      #".*saml.*"]
+    [:security-tokens    #".*token.*" #".*storage.*"]
+    [:security-servlet   #".*security.*" #".*servlet.*"]
+    [:security-sessions  #".*session.*" #".*management.*"]
+    [:security-core      #".*security.*" #".*core.*"]
+    [:security           #".*security.*"]
+    [:solr               #".*solr.*"]
+    [:admin-core         #".*admin.*" #".*core.*"]
+    [:admin              #".*admin.*"]
+    [:transformer        #".*transformer.*"]
+    [:registry           #".*registry.*"]
+    [:resourcemanagement #".*resourcemanagement.*"]
+    [:spatial-csw        #".*spatial.*" #".*csw.*"]
+    [:spatial-geocoding  #".*spatial.*" #".*geocoding.*"]
+    [:spatial-kml        #".*spatial.*" #".*kml.*"]
+    [:spatial-ogc        #".*spatial.*" #".*ogc.*"]
+    [:spatial-wfs        #".*spatial.*" #".*wfs.*"]
+    [:spatial            #".*spatial.*"]
+    [:catalog-opensearch #".*catalog.*" #".*opensearch.*"]
+    [:catalog-rest       #".*catalog.*" #".*rest.*"]
+    [:catalog-validator  #".*catalog.*" #".*validator.*"]
+    [:catalog-plugins    #".*catalog.*" #".*plugin.*"]
+    [:catalog-core       #".*catalog.*" #".*core.*"]
+    [:catalog            #".*catalog.*"]
+    [:persistence        #".*persistence.*"]
+    [:action             #".*action.*"]
+    [:metrics            #".*metrics.*|.*micrometer.*"]
+    [:mime               #".*mime.*"]
+    [:platform           #".*platform.*"]))
+;; @formatter:on
 
 (defn- categorize
   "Categorizes the provided input string."
   [str]
-  (loop [cats (seq categories-sorted)]
+  (loop [cats (seq categories)]
     (if (empty? cats)
       :none
-      (let [next (first cats)
-            match? (reduce #(and %1 %2) (map #(boolean (re-matches % str)) (last next)))]
+      (let [next-cat-vec (first cats)
+            match? (reduce #(and %1 %2) (map #(boolean (re-matches % str)) (rest next-cat-vec)))]
         (if match?
-          (first next)
+          (first next-cat-vec)
           (recur (rest cats)))))))
 
 (defn- add-category
@@ -323,7 +313,21 @@
   (let [id (get-in artifact [:maven :artifact-id])]
     (lm-attr/add-attr graph qualname :category (categorize id))))
 
+(defn- add-api-flag
+  [graph qualname artifact]
+  (let [id (get-in artifact [:maven :artifact-id])]
+    (lm-attr/add-attr graph qualname :api-flag (.contains id "api"))))
+
 (comment
+  (categorize "my-security-api")
+  (categorize "my-security-bundle")
+  (categorize "my-admin-solr-bundle")
+  (categorize "my-spatial-wfs-ogc-bundle")
+  (categorize "my-catalog-plugin")
+  (categorize "my-catalog-bundle")
+  (categorize "my-catalog-transformer")
+  (categorize "my-platform-micrometer-impl")
+  (categorize "my-platform-bundle")
   (categorize "aimalr")
   (comment))
 
@@ -351,6 +355,7 @@
                        (lm-attr/add-attr g node key (get-in art [:maven key])))]
     (-> graph
         (add-category qualname artifact)
+        (add-api-flag qualname artifact)
         (add-mvn-attr qualname artifact :group-id)
         (add-mvn-attr qualname artifact :artifact-id)
         (add-mvn-attr qualname artifact :version)

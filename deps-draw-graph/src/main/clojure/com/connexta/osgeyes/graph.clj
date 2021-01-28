@@ -125,7 +125,7 @@
   [key val]
   {:tag     :data
    :attrs   {:key (name key)}
-   :content [(if (keyword? val) (name val) val)]})
+   :content [(if (keyword? val) (name val) (.toString val))]})
 
 (defn- graphml-node-mapper
   "Produces a mapping function for creating graphml xml nodes."
@@ -164,6 +164,7 @@
                        (create-graphml-key :version :node :string)
                        (create-graphml-key :packaging :node :string)
                        (create-graphml-key :category :node :string)
+                       (create-graphml-key :api-flag :node :boolean)
                        ;; edges
                        (create-graphml-key :type :edge :string)
                        (create-graphml-key :cause :edge :string))]
@@ -175,14 +176,17 @@
 ;; Call chain for transforming Loom graphs into vis.js graphs for rendering.
 ;;
 (comment
-  (-> (lm-gra/digraph [:a :b] [:b :c] [:a :c])
-      (lm-attr/add-attr-to-nodes :color "lightblue" [:b :c])
-      (lm-attr/add-attr-to-edges :color "red" [[:a :b] [:b :c]])
-      (lm-attr/add-attr :a :color "purple")
-      (lm-attr/add-attr [:a :c] :color "black")
-      (lm-attr/add-attr :b :type "bundle")
-      #_(lm-attr/attrs :b)
-      (gen-graphml-from-graph)))
+  (let [graph (-> (lm-gra/digraph [:a :b] [:b :c] [:a :c])
+                  (lm-attr/add-attr-to-nodes :color "lightblue" [:b :c])
+                  (lm-attr/add-attr-to-edges :color "red" [[:a :b] [:b :c]])
+                  (lm-attr/add-attr :a :color "purple")
+                  (lm-attr/add-attr [:a :c] :color "black")
+                  (lm-attr/add-attr :b :type "bundle")
+                  (lm-attr/add-attr :a :flag true))
+        nodes (map (graphml-node-mapper graph) (lm-gra/nodes graph))
+        edges (map (graphml-edge-mapper graph) (lm-gra/edges graph))
+        doc (list (create-graphml-graph (concat nodes edges)))]
+    doc))
 
 (defn- json-for-nodes [graph]
   (->> graph
