@@ -5,14 +5,14 @@
   end users as part of the application. Refer to the development notes below for details on how
   things work and how they can be extended. Actual function defs begin below the notes section."
 
+  (:use [loom.graph]
+        [loom.attr])
   (:require [com.connexta.osgeyes.env :as env]
             [com.connexta.osgeyes.graph :as graph]
             [com.connexta.osgeyes.options :as opts]
             [com.connexta.osgeyes.files.manifest :as manifest]
             [com.connexta.osgeyes.index.core :as index]
-            [clojure.string :as string]
-            [loom.graph :as lm-gra]
-            [loom.attr :as lm-attr])
+            [ubergraph.core :as uber])
   (:import (java.awt Desktop)
            (java.io File)))
 
@@ -256,6 +256,23 @@
 (def ^:private categories
   "Category names and the criteria that defines them, in the order that they should be applied."
   (vector
+    [:solr               #".*solr.*"]
+    [:admin-core         #".*admin.*" #".*core.*"]
+    [:admin              #".*admin.*"]
+    [:catalog-core       #".*catalog.*" #".*core.*"]
+    [:catalog-transform  #".*catalog.*" #".*transformer.*"]
+    [:catalog-opensearch #".*catalog.*" #".*opensearch.*"]
+    [:catalog-rest       #".*catalog.*" #".*rest.*"]
+    [:catalog-validator  #".*catalog.*" #".*validator.*"]
+    [:catalog-plugins    #".*catalog.*" #".*plugin.*"]
+    [:catalog            #".*catalog.*"]
+    [:spatial-csw        #".*spatial.*" #".*csw.*"]
+    [:spatial-geocoding  #".*spatial.*" #".*geocoding.*"]
+    [:spatial-kml        #".*spatial.*" #".*kml.*"]
+    [:spatial-ogc        #".*spatial.*" #".*ogc.*"]
+    [:spatial-wfs        #".*spatial.*" #".*wfs.*"]
+    [:spatial            #".*spatial.*"]
+    [:security-core      #".*security.*" #".*core.*"]
     [:security-claims    #".*security.*" #".*claims.*"]
     [:security-encrypt   #".*security.*" #".*encryption.*"]
     [:security-expand    #".*security.*" #".*expansion.*"]
@@ -269,26 +286,9 @@
     [:security-tokens    #".*token.*" #".*storage.*"]
     [:security-servlet   #".*security.*" #".*servlet.*"]
     [:security-sessions  #".*session.*" #".*management.*"]
-    [:security-core      #".*security.*" #".*core.*"]
     [:security           #".*security.*"]
-    [:solr               #".*solr.*"]
-    [:admin-core         #".*admin.*" #".*core.*"]
-    [:admin              #".*admin.*"]
-    [:transformer        #".*transformer.*"]
     [:registry           #".*registry.*"]
     [:resourcemanagement #".*resourcemanagement.*"]
-    [:spatial-csw        #".*spatial.*" #".*csw.*"]
-    [:spatial-geocoding  #".*spatial.*" #".*geocoding.*"]
-    [:spatial-kml        #".*spatial.*" #".*kml.*"]
-    [:spatial-ogc        #".*spatial.*" #".*ogc.*"]
-    [:spatial-wfs        #".*spatial.*" #".*wfs.*"]
-    [:spatial            #".*spatial.*"]
-    [:catalog-opensearch #".*catalog.*" #".*opensearch.*"]
-    [:catalog-rest       #".*catalog.*" #".*rest.*"]
-    [:catalog-validator  #".*catalog.*" #".*validator.*"]
-    [:catalog-plugins    #".*catalog.*" #".*plugin.*"]
-    [:catalog-core       #".*catalog.*" #".*core.*"]
-    [:catalog            #".*catalog.*"]
     [:persistence        #".*persistence.*"]
     [:action             #".*action.*"]
     [:metrics            #".*metrics.*|.*micrometer.*"]
@@ -311,12 +311,12 @@
 (defn- add-category
   [graph qualname artifact]
   (let [id (get-in artifact [:maven :artifact-id])]
-    (lm-attr/add-attr graph qualname :category (categorize id))))
+    (add-attr graph qualname :category (categorize id))))
 
 (defn- add-api-flag
   [graph qualname artifact]
   (let [id (get-in artifact [:maven :artifact-id])]
-    (lm-attr/add-attr graph qualname :api-flag (.contains id "api"))))
+    (add-attr graph qualname :api-flag (.contains id "api"))))
 
 (comment
   (categorize "my-security-api")
@@ -340,19 +340,19 @@
 (defn- add-disconnected-nodes-to-graph
   "Reducing function that ensures any node not inferrable from edges is still apart of the graph."
   [graph [qualname artifact]]
-  (if (contains? (lm-gra/nodes graph) qualname)
+  (if (has-node? graph qualname)
     graph
-    (lm-gra/add-nodes graph qualname)))
+    (add-nodes graph qualname)))
 
 (defn- with-node-attrs
   "Reducing function that adds maven artifact metadata to graph node attributes."
   [graph [qualname artifact]]
   ;; If Loom complains about a 'string' not satisfying the 'Edge' protocol, it just means
   ;; the node/edge doesn't exist so can't be used to tweak attributes
-  (when (not (contains? (lm-gra/nodes graph) qualname))
+  (when (not (has-node? graph qualname))
     (throw (IllegalArgumentException. (str "Could not find " qualname " in nodes"))))
   (let [add-mvn-attr (fn [g node art key]
-                       (lm-attr/add-attr g node key (get-in art [:maven key])))]
+                       (add-attr g node key (get-in art [:maven key])))]
     (-> graph
         (add-category qualname artifact)
         (add-api-flag qualname artifact)
@@ -361,29 +361,29 @@
         (add-mvn-attr qualname artifact :version)
         (add-mvn-attr qualname artifact :packaging))))
 
-(defn- with-edge-attrs
-  "Reducing function that adds edge metadata to graph edge attributes."
-  [graph edge]
-  (let [from (:from edge)
-        to (:to edge)]
-    (-> graph
-        (lm-attr/add-attr from to :cause (:cause edge))
-        (lm-attr/add-attr from to :type (:type edge)))))
-
 (defn- create-graph-with-attrs
   "Creates a graph with original metadata preserved as graph attributes."
   [artifact-map]
   (let [edges (artifacts->edges artifact-map)
-        graph (->> edges (map #(vector (:from %) (:to %))) (apply lm-gra/digraph))
+        ;; Vector used to setup (Uber)graph using edge descriptor: [source, destination, attributes]
+        ;; Refer to README: https://github.com/Engelberg/ubergraph#edge-descriptions
+        graph (->> edges (map #(vector (:from %) (:to %) %)) (apply uber/ubergraph true false))
         pairs (seq artifact-map)]
     (as-> graph g
           (reduce add-disconnected-nodes-to-graph g pairs)
-          (reduce with-node-attrs g pairs)
-          (reduce with-edge-attrs g edges))))
+          (reduce with-node-attrs g pairs))))
 
 (comment
+  (-> (uber/ubergraph true false [:a :b])
+      (add-attr [:a :b] "k" "v")
+      (add-nodes "mystr")
+      (edges)
+      (first)
+      (dest))
+
   (create-graph-with-attrs
     (aggregate-with-all "ddf" "ddf" "2.19.5"))
+
   (comment))
 
 ;;

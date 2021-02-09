@@ -1,8 +1,8 @@
 (ns com.connexta.osgeyes.graph
   "Graph manipulation and rendering."
-  (:require [loom.graph :as lm-gra]
-            [loom.attr :as lm-attr]
-            [com.connexta.osgeyes.env :as env]
+  (:use [loom.graph]
+        [loom.attr])
+  (:require [com.connexta.osgeyes.env :as env]
             [clojure.xml :as xml]
             [clojure.string :as string]
             [clojure.data.json :as json]
@@ -134,28 +134,28 @@
     (create-graphml-node
       nodeid
       (->> nodeid
-           (lm-attr/attrs graph)
+           (attrs graph)
            (seq)
            (map #(apply create-graphml-data %))))))
 
 (defn- graphml-edge-mapper
   "Produces a mapping function for creating graphml xml edges."
   [graph]
-  (fn [edgevec]
-    (let [from (get edgevec 0)
-          to (get edgevec 1)]
+  (fn [edgeobj]
+    (let [from (src edgeobj)
+          to (dest edgeobj)]
       (create-graphml-edge
         from
         to
-        (->> (lm-attr/attrs graph from to)
+        (->> (attrs graph edgeobj)
              (seq)
              (map #(apply create-graphml-data %)))))))
 
 (defn gen-graphml-from-graph
   "Transforms a Loom graph into a graphml XML string."
   [graph]
-  (let [graphml-nodes (map (graphml-node-mapper graph) (lm-gra/nodes graph))
-        graphml-edges (map (graphml-edge-mapper graph) (lm-gra/edges graph))
+  (let [graphml-nodes (map (graphml-node-mapper graph) (nodes graph))
+        graphml-edges (map (graphml-edge-mapper graph) (edges graph))
         graphml-graph (list (create-graphml-graph (concat graphml-nodes graphml-edges)))
         graphml-keys (list
                        ;; nodes
@@ -176,33 +176,42 @@
 ;; Call chain for transforming Loom graphs into vis.js graphs for rendering.
 ;;
 (comment
-  (let [graph (-> (lm-gra/digraph [:a :b] [:b :c] [:a :c])
-                  (lm-attr/add-attr-to-nodes :color "lightblue" [:b :c])
-                  (lm-attr/add-attr-to-edges :color "red" [[:a :b] [:b :c]])
-                  (lm-attr/add-attr :a :color "purple")
-                  (lm-attr/add-attr [:a :c] :color "black")
-                  (lm-attr/add-attr :b :type "bundle")
-                  (lm-attr/add-attr :a :flag true))
-        nodes (map (graphml-node-mapper graph) (lm-gra/nodes graph))
-        edges (map (graphml-edge-mapper graph) (lm-gra/edges graph))
+  ;; note - multi-graphs not feasible
+  (let [g1 (-> (digraph [:a :b])
+               (add-attr-to-nodes :color "blue" [:a :b])
+               (add-attr-to-edges :color "navy" [[:a :b]]))
+        g2 (-> (digraph [:a :b])
+               (add-attr-to-nodes :color "green" [:a :b])
+               (add-attr-to-edges :color "sage" [[:a :b]]))]
+    (digraph g1 g2))
+
+  (let [graph (-> (digraph [:a :b] [:b :c] [:a :c])
+                  (add-attr-to-nodes :color "lightblue" [:b :c])
+                  (add-attr-to-edges :color "red" [[:a :b] [:b :c]])
+                  (add-attr :a :color "purple")
+                  (add-attr [:a :c] :color "black")
+                  (add-attr :b :type "bundle")
+                  (add-attr :a :flag true))
+        nodes (map (graphml-node-mapper graph) (nodes graph))
+        edges (map (graphml-edge-mapper graph) (edges graph))
         doc (list (create-graphml-graph (concat nodes edges)))]
     doc))
 
 (defn- json-for-nodes [graph]
   (->> graph
-       (lm-gra/nodes)
+       (nodes)
        (map #(merge
                (hash-map :id % :label %)
-               (lm-attr/attrs graph %)))
+               (attrs graph %)))
        vec
        json/write-str))
 
 (defn- json-for-edges [graph]
   (->> graph
-       (lm-gra/edges)
+       (edges)
        (map #(merge
                (hash-map :from (get % 0) :to (get % 1))
-               (lm-attr/attrs graph %)))
+               (attrs graph %)))
        vec
        json/write-str))
 
@@ -215,10 +224,10 @@
   (let [colors {"dd" "lightblue" "al" "wheat" "gs" "lightsalmon" "au" "lavender"}
         default "lightgray"]
     (->> graph
-         lm-gra/nodes
+         nodes
          (reduce
            #(let [c (colors (subs %2 0 2))]
-              (lm-attr/add-attr %1 %2 :color (if (nil? c) default c)))
+              (add-attr %1 %2 :color (if (nil? c) default c)))
            graph))))
 
 (defn- enhance-graph [graph]
@@ -242,7 +251,7 @@
   [edges]
   (->> edges
        (map #(vector (:from %) (:to %)))
-       (apply lm-gra/digraph)
+       (apply digraph)
        (gen-graphml-from-graph)))
 
 (defn gen-html-from-edges
@@ -250,7 +259,7 @@
   [edges]
   (->> edges
        (map #(vector (:from %) (:to %)))
-       (apply lm-gra/digraph)
+       (apply digraph)
        (gen-html-from-graph)))
 
 (defn !write-graphml

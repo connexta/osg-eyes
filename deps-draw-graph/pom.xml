@@ -50,6 +50,11 @@
         native executable that will likely be removed in favor of the vis.js library.
         -->
         <dependency>
+            <groupId>ubergraph</groupId>
+            <artifactId>ubergraph</artifactId>
+            <version>${ubergraph.version}</version>
+        </dependency>
+        <dependency>
             <groupId>aysylu</groupId>
             <artifactId>loom</artifactId>
             <version>${loom.version}</version>

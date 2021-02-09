@@ -25,8 +25,9 @@
         <clojure.data.json.version>1.0.0</clojure.data.json.version>
         <!--  Primary Dependencies  -->
         <reply.version>0.4.4</reply.version>
+        <ubergraph.version>0.8.2</ubergraph.version>
         <loom.version>1.0.2</loom.version>
-        <dorothy.version>0.0.7</dorothy.version>
+        <dorothy.version>0.0.6</dorothy.version>
     </properties>
 
     <modules>
