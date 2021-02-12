@@ -1,12 +1,73 @@
 (ns com.connexta.osgeyes.files.manifest-test
+  "Manifest parsing unit tests and sample data. There are several types of test cases detailed
+  in this namespace:
+  - Edge Assembly, verifies correct graph edge generation given an artifact map.
+  - Manifest Parsing, verifies *.MF documents can correctly get converted to Clojure maps.
+    - Invalid Input Cases, focus on function behavior for input that should never occur.
+    - Base Attribute Cases, base truth for individual attributes.
+    - Base Multi-valued Attribute Cases, base truth for the more complicated attributes.
+    - Document Cases, which represent realistic input encountered in the wild.
+
+  In general, keep the base truths simple and limited. For verifying against format quirks or other
+  difficult issues, use document cases that target the attribute in question.
+  "
   (:require [clojure.test :refer :all]
             [com.connexta.osgeyes.files.manifest :as mf]))
 
-;; ----------------------------------------------------------------------
+(def manifests-home "src/test/resources/manifests/")
+
+;; Note: Embedded-Artifacts (ea), Export-Package/Service (ep/es), Import-Package/Service (ip/is)
+;;   full manifest samples prioritize attribute variety in a doc vs individual attribute complexity.
+
+;; @formatter:off
+(def ea-basic             (str manifests-home "embedded-artifacts/BASIC.MF"))
+(def ea-basic-carriage    (str manifests-home "embedded-artifacts/BASIC_CARRIAGE.MF"))
+(def ep-attrs-all         (str manifests-home "export-package/ATTRS_ALL.MF"))
+(def es-attrs-all-typed   (str manifests-home "export-service/ATTRS_ALL_TYPED.MF"))
+(def es-attrs-all-spaces  (str manifests-home "export-service/ATTRS_ALL_TYPED_SPACES.MF"))
+(def es-no-attrs          (str manifests-home "export-service/NO_ATTRS.MF"))
+(def es-no-attrs-carriage (str manifests-home "export-service/NO_ATTRS_CARRIAGE.MF"))
+(def full-basic           (str manifests-home "full/BASIC.MF"))
+(def full-basic-attrs     (str manifests-home "full/BASIC_ATTRS.MF"))
+(def full-minimal         (str manifests-home "full/MINIMAL.MF"))
+(def ip-attrs-all         (str manifests-home "import-package/ATTRS_ALL.MF"))
+(def ip-no-attrs          (str manifests-home "import-package/NO_ATTRS.MF"))
+(def ip-no-attrs-carriage (str manifests-home "import-package/NO_ATTRS_CARRIAGE.MF"))
+(def is-basic             (str manifests-home "import-service/BASIC.MF"))
+(def is-basic-carriage    (str manifests-home "import-service/BASIC_CARRIAGE.MF"))
+;; @formatter:on
+
+(defn- add-carriage-returns
+  "Given a path to a text file, loads the content of the file as a string with a carriage
+  return (\r) added to the end of each line. Defined here for managing test resources."
+  [path]
+  (let [lines (with-open [rdr (clojure.java.io/reader path)]
+                (doall (line-seq rdr)))]
+    (->> lines
+         (map #(str % "\r"))
+         (interpose (System/lineSeparator))
+         (apply str))))
+
+(comment
+  ;; Use the following to verify the contents, carriage returns won't be visible in std text
+  ;; editors but the Clojure REPL will reveal them if the text is loaded.
+  (slurp is-basic)
+  (slurp is-basic-carriage)
+
+  ;; Sample usage - will overwrite the content of is-basic-carriage with the resulting text of
+  ;; (add-carriage-returns ...)
+  (spit is-basic-carriage
+        (add-carriage-returns is-basic)
+        :create false
+        :append false))
+
+;;
+;; ----------------------------------------------------------------------------------------------
 ;; # Manifest Edge Assembly
+;; ----------------------------------------------------------------------------------------------
 ;;
 
-(def test-locale
+(def test-manifests
   {"sample/dir1" {:manifest {::mf/Import-Package '("pkg.1" "pkg.2")
                              ::mf/Export-Package '("pkg.9" "pkg.8")
                              ::mf/Import-Service '("svc.1" "svc.2")
@@ -28,8 +89,8 @@
                              ::mf/Import-Service '("svc.z" "svc.8")
                              ::mf/Export-Service '()}}})
 
-(deftest gen-edges-from-locale
-  (is (= (mf/artifacts->edges test-locale)
+(deftest gen-edges-from-manifests
+  (is (= (mf/artifacts->edges test-manifests)
          '({:cause "pkg.1", :type "bundle/package", :from "sample/dir1", :to "sample/dir3"}
            {:cause "pkg.2", :type "bundle/package", :from "sample/dir1", :to "sample/dir2"}
            {:cause "pkg.9", :type "bundle/package", :from "sample/dir4", :to "sample/dir1"}
@@ -47,10 +108,10 @@
            {:cause "svc.z", :type "bundle/service", :from "sample/dir5", :to "sample/dir4"}
            {:cause "svc.8", :type "bundle/service", :from "sample/dir5", :to "sample/dir1"}))))
 
-(comment (mf/artifacts->edges test-locale))
-
-;; ----------------------------------------------------------------------
-;; # Manifest Parsing
+;;
+;; ----------------------------------------------------------------------------------------------
+;; # Manifest Parsing - Invalid Input Cases
+;; ----------------------------------------------------------------------------------------------
 ;;
 
 (deftest parse-invalid-manifest
@@ -65,6 +126,18 @@
   (is (thrown? IllegalArgumentException
                (mf/parse-content "Unrecognized: 1.0"))))
 
+(deftest parse-empty-manifest
+  ;; thrown? cannot be resolved
+  ;; https://github.com/cursive-ide/cursive/issues/238
+  (is (thrown? IllegalArgumentException
+               (mf/parse-content ""))))
+
+;;
+;; ----------------------------------------------------------------------------------------------
+;; # Manifest Parsing - Base Attribute Cases
+;; ----------------------------------------------------------------------------------------------
+;;
+
 (deftest parse-manifest-version
   (is (= {::mf/Manifest-Version "1.0"}
          (mf/parse-content "Manifest-Version: 1.0"))))
@@ -76,19 +149,6 @@
 (deftest parse-build-jdk
   (is (= {::mf/Build-Jdk "1.8.0_131"}
          (mf/parse-content "Build-Jdk: 1.8.0_131"))))
-
-(deftest parse-multiple-attributes
-  (is (= {::mf/Manifest-Version "1.0"
-          ::mf/Bnd-LastModified "1586379298756"
-          ::mf/Build-Jdk        "1.8.0_131"}
-         (mf/parse-content
-           "Manifest-Version: 1.0\nBnd-LastModified: 1586379298756\nBuild-Jdk: 1.8.0_131"))))
-
-(deftest parse-multiple-attributes-from-file
-  (is (= {::mf/Manifest-Version "1.0"
-          ::mf/Bnd-LastModified "1586379298756"
-          ::mf/Build-Jdk        "1.8.0_131"}
-         (mf/parse-file "src/test/resources/TEST_MANIFEST.MF"))))
 
 (deftest parse-built-by
   (is (= {::mf/Built-By "hrogers"}
@@ -143,212 +203,451 @@
   (is (= {::mf/Tool "Bnd-4.2.0.201903051501"}
          (mf/parse-content "Tool: Bnd-4.2.0.201903051501"))))
 
+;;
+;; ----------------------------------------------------------------------------------------------
+;; # Manifest Parsing - Base Multi-valued Attribute Cases
+;; ----------------------------------------------------------------------------------------------
+;;
+
 (deftest parse-bundle-classpath
-  (is (= {::mf/Bundle-ClassPath (str ".,spatial-ogc-common-2.24.0-SNAPSHOT.jar,spatial-csw-c"
-                                     "ommon-2.24.0-SNAP"
-                                     "SHOT.jar,spatial-csw-transformer-2.24.0-SNAPSHOT.jar,c"
-                                     "atalog-core-api-i"
-                                     "mpl-2.24.0-SNAPSHOT.jar,geospatial-2.24.0-SNAPSHOT.jar"
-                                     ",commons-lang3-3.9.jar")}
+  (is (= {::mf/Bundle-ClassPath
+          (str ".,"
+               "spatial-ogc-common-2.24.0-SNAPSHOT.jar,"
+               "spatial-csw-common-2.24.0-SNAPSHOT.jar,"
+               "spatial-csw-transformer-2.24.0-SNAPSHOT.jar,"
+               "catalog-core-api-impl-2.24.0-SNAPSHOT.jar,"
+               "geospatial-2.24.0-SNAPSHOT.jar,"
+               "commons-lang3-3.9.jar")}
          (mf/parse-content
-           (str "Bundle-ClassPath: .,spatial-ogc-common-2.24.0-SNAPSHOT.jar,spatial-csw-c\n"
-                " ommon-2.24.0-SNAPSHOT.jar,spatial-csw-transformer-2.24.0-SNAPSHOT.jar,c\n"
-                " atalog-core-api-impl-2.24.0-SNAPSHOT.jar,geospatial-2.24.0-SNAPSHOT.jar\n"
+           (str "Bundle-ClassPath: .,spatial-ogc-common-2.24.0-SNAPSHOT.jar,spatial-csw-c"
+                (System/lineSeparator)
+                " ommon-2.24.0-SNAPSHOT.jar,spatial-csw-transformer-2.24.0-SNAPSHOT.jar,c"
+                (System/lineSeparator)
+                " atalog-core-api-impl-2.24.0-SNAPSHOT.jar,geospatial-2.24.0-SNAPSHOT.jar"
+                (System/lineSeparator)
                 " ,commons-lang3-3.9.jar")))))
 
 (deftest parse-embed-dependency
-  (is (= {::mf/Embed-Dependency '("spatial-ogc-common"
-                                   "spatial-csw-common"
-                                   "spatial-csw-transformer"
-                                   "catalog-core-api-impl"
-                                   "geospatial"
-                                   "commons-lang3")}
-         (mf/parse-content (str "Embed-Dependency: spatial-ogc-common,spatial-csw-common,"
-                                "spatial-csw-tran\n sformer,catalog-core-api-impl,geospatial"
-                                ",commons-lang3")))))
+  (is (= {::mf/Embed-Dependency
+          '("spatial-ogc-common"
+             "spatial-csw-common"
+             "spatial-csw-transformer"
+             "catalog-core-api-impl"
+             "geospatial"
+             "commons-lang3")}
+         (mf/parse-content
+           (str "Embed-Dependency: spatial-ogc-common,spatial-csw-common,"
+                "spatial-csw-transformer,catalog-core-api-impl,geospatial"
+                ",commons-lang3")))))
 
-(deftest parse-embedded-artifacts
+;;
+;; ----------------------------------------------------------------------------------------------
+;; # Manifest Parsing - Multi-valued Attribute Cases - Import/Export Package/Service
+;; ----------------------------------------------------------------------------------------------
+;;
+
+(deftest parse-single-item-no-attrs
+  ;; Major problem is (as of now) the most basic case only works preceding a ';' - TODO
+  ;; Hypothetically there may be singular cases w/o attrs getting missed in prod (rarely)
+  (are [kw] (= {kw '()}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.exported")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-double-item-no-attrs
+  (are [kw] (= {kw '()}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.exported,also.this.one")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-triple-item-no-attrs
+  (are [kw] (= {kw '()}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.exported,also.this.one,and.this.one")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-single-item-one-attr
+  (are [kw] (= {kw '("this.package.is.exported")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.is.exported;attr=val")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-single-item-one-attr-colon-equals-delimiter
+  (are [kw] (= {kw '("this.package.is.exported")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.is.exported;attr:=val")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-single-item-capitalized-one-attr
+  (are [kw] (= {kw '("this.package.is.Exported")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.is.Exported;attr:=val")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-single-item-one-attr-boolean
+  (are [kw] (= {kw '("this.package.is.exported")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.is.exported;multiple:=false")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-single-item-underscored-numerics-one-attr
+  (are [kw] (= {kw '("net.opengis.cat.csw.v_2_0_2")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "net.opengis.cat.csw.v_2_0_2;attr:=val")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-single-item-one-attr-version-number
+  (are [kw] (= {kw '("this.package.is.exported")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.is.exported;version=\"1.1\"")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-single-item-one-attr-version-range
+  (are [kw] (= {kw '("this.package.is.exported")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.is.exported;version=\"[2.8,3)\"")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-single-item-one-attr-typed-list
+  (are [kw] (= {kw '("this.package.is.exported")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.is.exported;id:List<String>="
+                      "\"{http://www.opengis.net/cat/csw/2.0.2}Record,"
+                      "{http://www.isotc211.org/2005/gmd}MD_Metadata\"")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-double-item-one-attr
+  (are [kw] (= {kw '("this.package.is.exported"
+                      "also.this.one")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.is.exported;attr=val,also.this.one;attr=hi")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-double-item-one-multi-valued-attr
+  (are [kw] (= {kw '("this.package.is.exported"
+                      "also.this.one")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.is.exported;multi=\"hi,sup,yo\",also.this.one;attr=hello")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-single-item-many-attrs
+  (are [kw] (= {kw '("this.package.is.exported")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.is.exported;attr=val;multi=\"hi,sup,yo\";note=test")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+(deftest parse-triple-item-only-middle-package-has-attrs
+  (are [kw] (= {kw '("also.this.one")}
+               (mf/parse-content
+                 (str (name kw)
+                      ": "
+                      "this.package.exported,also.this.one;version=\"1.1\";attr=val,and.this.one")))
+            ::mf/Export-Package
+            ::mf/Export-Service
+            ::mf/Import-Package
+            ::mf/Import-Service))
+
+;;
+;; ----------------------------------------------------------------------------------------------
+;; # Manifest Parsing - Document Cases - Full
+;; ----------------------------------------------------------------------------------------------
+;;
+
+(deftest parse-doc-full-minimal-singleton-lines-from-file
+  (is (= #::mf{:Manifest-Version "1.0"
+               :Bnd-LastModified "1586379298756"
+               :Build-Jdk        "1.8.0_131"}
+         (mf/parse-file full-minimal))))
+
+(deftest parse-doc-full-multiple-single-lists-from-file
+  (is (= #::mf{:Bundle-Blueprint '("OSGI-INF/blueprint/cxf-sts.xml" "OSGI-INF/blueprint/tokenstore.xml"),
+               :Export-Service '(),
+               :Import-Package '(),
+               :Require-Capability "osgi.ee;filter:=\"(&(osgi.ee=JavaSE)(version=1.8))\"",
+               :Bundle-Name "DDF :: Security :: STS :: Server",
+               :Bundle-DocURL "http://codice.org",
+               :Manifest-Version "1.0",
+               :Tool "Bnd-3.5.0.201709291849",
+               :Bundle-Version "2.19.14",
+               :Bundle-ClassPath ".,security-sts-x509delegationhandler-2.19.14.jar",
+               :Bundle-SymbolicName "security-sts-server",
+               :Build-Jdk "1.8.0_191",
+               :Bundle-License "http://www.gnu.org/licenses/lgpl.html",
+               :Bundle-Description "Distributed Data Framework (DDF) Parent",
+               :Import-Service '(),
+               :Embedded-Artifacts '("security-sts-x509delegationhandler-2.19.14.jar"),
+               :Built-By "root",
+               :Bundle-ManifestVersion "2",
+               :Bundle-Vendor "Codice Foundation",
+               :Export-Package '(),
+               :Bnd-LastModified "1601586379376",
+               :Embed-Dependency '("security-sts-x509delegationhandler"),
+               :Created-By "Apache Maven Bundle Plugin"}
+         (mf/parse-file full-basic))))
+
+(deftest parse-doc-full-multiple-single-lists-with-attrs-from-file
+  (is (= #::mf{:Bundle-Blueprint '("OSGI-INF/blueprint/cxf-sts.xml"
+                                    "OSGI-INF/blueprint/tokenstore.xml"),
+               :Export-Service '(),
+               :Import-Package '("net.sf.ehcache"
+                                  "net.sf.ehcache.config"
+                                  "com.google.common.cache"
+                                  "com.hazelcast.core"),
+               :Require-Capability "osgi.ee;filter:=\"(&(osgi.ee=JavaSE)(version=1.8))\"",
+               :Bundle-Name "DDF :: Security :: STS :: Server",
+               :Bundle-DocURL "http://codice.org",
+               :Manifest-Version "1.0",
+               :Tool "Bnd-3.5.0.201709291849",
+               :Bundle-Version "2.19.14",
+               :Bundle-ClassPath ".,security-sts-x509delegationhandler-2.19.14.jar,httpclient-4.5.6.jar,httpcore-4.4.10.jar,platform-util-unavailableurls-2.19.14.jar,ddf-security-common-2.19.14.jar,platform-util-2.19.14.jar",
+               :Bundle-SymbolicName "security-sts-server",
+               :Build-Jdk "1.8.0_191",
+               :Bundle-License "http://www.gnu.org/licenses/lgpl.html",
+               :Bundle-Description "Distributed Data Framework (DDF) Parent",
+               :Import-Service '("org.apache.cxf.sts.claims.ClaimsHandler"
+                                  "org.apache.cxf.sts.token.validator.TokenValidator"),
+               :Embedded-Artifacts '("security-sts-x509delegationhandler-2.19.14.jar;g=\"ddf.security.sts\";a=\"security-sts-x509delegationhandler\";v=\"2.19.14\""),
+               :Built-By "root",
+               :Bundle-ManifestVersion "2",
+               :Bundle-Vendor "Codice Foundation",
+               :Export-Package '("org.codice.ddf.security.common"),
+               :Bnd-LastModified "1601586379376",
+               :Embed-Dependency '("security-sts-x509delegationhandler"),
+               :Created-By "Apache Maven Bundle Plugin"}
+         (mf/parse-file full-basic-attrs))))
+
+;;
+;; ----------------------------------------------------------------------------------------------
+;; # Manifest Parsing - Document Cases - Embedded Artifacts
+;; ----------------------------------------------------------------------------------------------
+;;
+
+(deftest parse-doc-embedded-artifacts-basic
   (is (= {::mf/Embedded-Artifacts
-          '("spatial-ogc-common-2.24.0-SNAPSHOT.jar;g=\"org.codice.ddf.spatial\";a=\"spatial-ogc-common\";v=\"2.24.0-SNAPSHOT\""
-             "spatial-csw-common-2.24.0-SNAPSHOT.jar;g=\"org.codice.ddf.spatial\";a=\"spatial-csw-common\";v=\"2.24.0-SNAPSHOT\""
-             "spatial-csw-transformer-2.24.0-SNAPSHOT.jar;g=\"org.codice.ddf.spatial\";a=\"spatial-csw-transformer\";v=\"2.24.0-SNAPSHOT\""
-             "catalog-core-api-impl-2.24.0-SNAPSHOT.jar;g=\"ddf.catalog.core\";a=\"catalog-core-api-impl\";v=\"2.24.0-SNAPSHOT\""
-             "geospatial-2.24.0-SNAPSHOT.jar;g=\"org.codice.ddf\";a=\"geospatial\";v=\"2.24.0-SNAPSHOT\""
-             "commons-lang3-3.9.jar;g=\"org.apache.commons\";a=\"commons-lang3\";v=\"3.9\"")}
-         (mf/parse-content (str "Embedded-Artifacts: spatial-ogc-common-2.24.0-SNAPSHOT.jar;g=\"o"
-                                "rg.codice\n .ddf.spatial\";a=\"spatial-ogc-common\";v=\"2.24.0-SN"
-                                "APSHOT\",spatial-csw-co\n mmon-2.24.0-SNAPSHOT.jar;g=\"org.codice"
-                                ".ddf.spatial\";a=\"spatial-csw-comm\n on\";v=\"2.24.0-SNAPSHOT\","
-                                "spatial-csw-transformer-2.24.0-SNAPSHOT.jar;g=\"\n org.codice.ddf"
-                                ".spatial\";a=\"spatial-csw-transformer\";v=\"2.24.0-SNAPSHOT\"\n "
-                                ",catalog-core-api-impl-2.24.0-SNAPSHOT.jar;g=\"ddf.catalog.core\""
-                                ";a=\"cata\n log-core-api-impl\";v=\"2.24.0-SNAPSHOT\",geospatial-"
-                                "2.24.0-SNAPSHOT.jar;g\n =\"org.codice.ddf\";a=\"geospatial\";v=\""
-                                "2.24.0-SNAPSHOT\",commons-lang3-3.9.\n jar;g=\"org.apache.commons"
-                                "\";a=\"commons-lang3\";v=\"3.9\"")))))
+          '("spatial-ogc-common-2.19.14.jar;g=\"org.codice.ddf.spatial\";a=\"spatial-ogc-common\";v=\"2.19.14\""
+             "spatial-csw-common-2.19.14.jar;g=\"org.codice.ddf.spatial\";a=\"spatial-csw-common\";v=\"2.19.14\""
+             "spatial-csw-transformer-2.19.14.jar;g=\"org.codice.ddf.spatial\";a=\"spatial-csw-transformer\";v=\"2.19.14\""
+             "catalog-core-api-impl-2.19.14.jar;g=\"ddf.catalog.core\";a=\"catalog-core-api-impl\";v=\"2.19.14\""
+             "platform-util-2.19.14.jar;g=\"ddf.platform.util\";a=\"platform-util\";v=\"2.19.14\""
+             "ddf-security-common-2.19.14.jar;g=\"ddf.security\";a=\"ddf-security-common\";v=\"2.19.14\""
+             "geospatial-2.19.14.jar;g=\"org.codice.ddf\";a=\"geospatial\";v=\"2.19.14\""
+             "platform-util-unavailableurls-2.19.14.jar;g=\"ddf.platform.util\";a=\"platform-util-unavailableurls\";v=\"2.19.14\""
+             "commons-lang3-3.8.1.jar;g=\"org.apache.commons\";a=\"commons-lang3\";v=\"3.8.1\"")}
+         (mf/parse-file ea-basic))))
 
-(deftest parse-single-export-package-no-attributes
-  (is (= {::mf/Export-Package '("this.package.is.exported")}
-         (mf/parse-content "Export-Package: this.package.is.exported;"))))
+(deftest parse-doc-embedded-artifacts-basic-with-carriage-returns
+  (is (= {::mf/Embedded-Artifacts
+          '("spatial-ogc-common-2.19.14.jar;g=\"org.codice.ddf.spatial\";a=\"spatial-ogc-common\";v=\"2.19.14\""
+             "spatial-csw-common-2.19.14.jar;g=\"org.codice.ddf.spatial\";a=\"spatial-csw-common\";v=\"2.19.14\""
+             "spatial-csw-transformer-2.19.14.jar;g=\"org.codice.ddf.spatial\";a=\"spatial-csw-transformer\";v=\"2.19.14\""
+             "catalog-core-api-impl-2.19.14.jar;g=\"ddf.catalog.core\";a=\"catalog-core-api-impl\";v=\"2.19.14\""
+             "platform-util-2.19.14.jar;g=\"ddf.platform.util\";a=\"platform-util\";v=\"2.19.14\""
+             "ddf-security-common-2.19.14.jar;g=\"ddf.security\";a=\"ddf-security-common\";v=\"2.19.14\""
+             "geospatial-2.19.14.jar;g=\"org.codice.ddf\";a=\"geospatial\";v=\"2.19.14\""
+             "platform-util-unavailableurls-2.19.14.jar;g=\"ddf.platform.util\";a=\"platform-util-unavailableurls\";v=\"2.19.14\""
+             "commons-lang3-3.8.1.jar;g=\"org.apache.commons\";a=\"commons-lang3\";v=\"3.8.1\"")}
+         (mf/parse-file ea-basic-carriage))))
 
-(deftest parse-single-export-package-with-newlines-and-two-attributes
-  (is (= {::mf/Export-Package '("some.other.separate.package")}
-         (mf/parse-content "Export-Package: some.other.separate.package;uses:=\"ddf.catalog.data,ddf\n .catalog.filter,ddf.catalog.operation,ddf.catalog.plugin,ddf.catalog.re\n source,ddf.catalog.source,org.codice.ddf.persistence\";version=\"15.8.0\""))))
+;;
+;; ----------------------------------------------------------------------------------------------
+;; # Manifest Parsing - Document Cases - Export Package
+;; ----------------------------------------------------------------------------------------------
+;;
 
-(deftest parse-export-package
-  (is (= {::mf/Export-Package '("this.package.exported"
-                                 "also.this.one"
-                                 "and.this.one")}
-         (mf/parse-content "Export-Package: this.package.exported;also.this.one;and.this.one;"))))
+(deftest parse-doc-export-package-all-entries-have-attrs
+  (is (= {::mf/Export-Package
+          '("net.opengis.cat.csw.v_2_0_2.dc.elements"
+             "net.opengis.cat.csw.v_2_0_2.dc.terms"
+             "net.opengis.cat.csw.v_2_0_2"
+             "net.opengis.filter.v_1_1_0"
+             "net.opengis.ows.v_1_0_0"
+             "net.opengis.gml.v_3_1_1")}
+         (mf/parse-file ep-attrs-all))))
 
-(deftest parse-export-package-with-uses-attribute
-  (is (= {::mf/Export-Package '("this.package.exported"
-                                 "also.this.one"
-                                 "and.this.one")}
-         (mf/parse-content "Export-Package: this.package.exported;also.this.one;uses:=\"package.one,package.two,package.three\",and.this.one;"))))
+;;
+;; ----------------------------------------------------------------------------------------------
+;; # Manifest Parsing - Document Cases - Export Service
+;; ----------------------------------------------------------------------------------------------
+;;
 
-(deftest parse-export-package-with-version-attribute
-  (is (= {::mf/Export-Package '("this.package.exported"
-                                 "also.this.one"
-                                 "and.this.one")}
-         (mf/parse-content "Export-Package: this.package.exported;also.this.one;version=\"2.24.0\",and.this.one;"))))
+(deftest parse-doc-export-service-all-entries-have-attrs-typed
+  (is (= {::mf/Export-Service
+          '("ddf.catalog.endpoint.CatalogEndpoint"
+             "ddf.catalog.event.Subscriber"
+             "ddf.catalog.transform.QueryFilterTransformer")}
+         (mf/parse-file es-attrs-all-typed))))
 
-(deftest parse-export-package-with-newlines-and-both-uses-and-version
-  (is (= {::mf/Export-Package '("org.codice.ddf.spatial.ogc.csw.catalog.endpoint.transformer"
-                                 "org.codice.ddf.spatial.ogc.csw.catalog.endpoint.mappings")}
-         (mf/parse-content "Export-Package: org.codice.ddf.spatial.ogc.csw.catalog.endpoint.transfor\n mer;uses:=\"ddf.catalog.data,ddf.catalog.operation,ddf.catalog.transform\n ,javax.annotation,org.codice.ddf.spatial.ogc.csw.catalog.actions,org.ge\n otools.filter.visitor,org.opengis.filter,org.opengis.filter.expression,\n org.opengis.filter.spatial,org.xml.sax.helpers\";version=\"2.24.0\",org.co\n dice.ddf.spatial.ogc.csw.catalog.endpoint.mappings;uses:=\"org.codice.dd\n f.spatial.ogc.csw.catalog.endpoint.transformer,org.geotools.filter.visi\n tor,org.opengis.filter,org.xml.sax.helpers\";version=\"2.24.0\""))))
+(deftest parse-doc-export-service-all-entries-have-attrs-typed-spaced
+  (is (= {::mf/Export-Service
+          '("ddf.catalog.transform.MetacardTransformer"
+             "record.xsd"
+             "ddf.catalog.data.MetacardType"
+             "ddf.catalog.transform.MetacardTransformer"
+             "gmd.xsd"
+             "ddf.catalog.data.MetacardType"
+             "ddf.catalog.transform.QueryFilterTransformerProvider"
+             "ddf.catalog.transform.QueryResponseTransformer"
+             "com.thoughtworks.xstream.converters.Converter"
+             "ddf.catalog.transform.InputTransformer"
+             "ddf.catalog.transform.InputTransformer")}
+         (mf/parse-file es-attrs-all-spaces))))
 
-(deftest parse-export-package-with-newlines-and-both-uses-and-version-then-just-version
-  (is (= {::mf/Export-Package '("org.codice.ddf.migration"
-                                 "org.codice.ddf.util.function")}
-         (mf/parse-content "Export-Package: org.codice.ddf.migration;uses:=\"org.codice.ddf.platform.\n services.common,org.codice.ddf.util.function\";version=\"2.24.0\",org.codi\n ce.ddf.util.function;version=\"2.24.0\""))))
+(deftest parse-doc-export-service-no-entries-have-attrs
+  (is (= {::mf/Export-Service '()}
+         (mf/parse-file es-no-attrs))))
 
-(deftest parse-export-service
-  (is (= {::mf/Export-Service '("ddf.catalog.transform.QueryFilterTransformer"
-                                 "ddf.catalog.endpoint.CatalogEndpoint"
-                                 "ddf.catalog.event.Subscriber")}
-         (mf/parse-content "Export-Service: ddf.catalog.transform.QueryFilterTransformer;id:List<Str\n ing>=\"{http://www.opengis.net/cat/csw/2.0.2}Record,{http://www.isotc211\n .org/2005/gmd}MD_Metadata,{urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0}\n RegistryPackage\";typeNames:List<String>=\"csw:Record,gmd:MD_Metadata,rim\n :RegistryPackage\";osgi.service.blueprint.compname=cswQueryFilterTransfo\n rmer,ddf.catalog.endpoint.CatalogEndpoint;osgi.service.blueprint.compna\n me=ddf.catalog.endpoint.csw,ddf.catalog.event.Subscriber;osgi.service.b\n lueprint.compname=CswSubscriptionSvc"))))
+(deftest parse-doc-export-service-no-entries-have-attrs-with-carriage-returns
+  (is (= {::mf/Export-Service '()}
+         (mf/parse-file es-no-attrs-carriage))))
 
-(deftest parse-import-package
-  (is (= {::mf/Import-Package '("net.opengis.cat.csw.v_2_0_2"
-                                 "net.opengis.cat.csw.v_2_0_2.dc.elements"
-                                 "net.opengis.filter.v_1_1_0"
-                                 "net.opengis.gml.v_3_1_1"
-                                 "net.opengis.ows.v_1_0_0"
-                                 "org.codice.ddf.spatial.ogc.csw.catalog.actions"
-                                 "com.google.common.base"
-                                 "com.google.common.collect"
-                                 "com.google.common.io"
-                                 "com.google.common.net"
-                                 "com.sun.xml.bind.marshaller"
-                                 "com.thoughtworks.xstream"
-                                 "com.thoughtworks.xstream.converters"
-                                 "com.thoughtworks.xstream.core")}
-         (mf/parse-content "Import-Package: net.opengis.cat.csw.v_2_0_2;version=\"[2.8,3)\",net.opengi\n s.cat.csw.v_2_0_2.dc.elements;version=\"[2.8,3)\",net.opengis.filter.v_1_\n 1_0;version=\"[2.8,3)\",net.opengis.gml.v_3_1_1;version=\"[2.8,3)\",net.ope\n ngis.ows.v_1_0_0;version=\"[2.8,3)\",org.codice.ddf.spatial.ogc.csw.catal\n og.actions;version=\"[2.24,3)\",com.google.common.base;version=\"[25.1,26)\n \",com.google.common.collect;version=\"[25.1,26)\",com.google.common.io;ve\n rsion=\"[25.1,26)\",com.google.common.net;version=\"[25.1,26)\",com.sun.xml\n .bind.marshaller;version=\"[2.2,3)\",com.thoughtworks.xstream;version=\"[1\n .4,2)\",com.thoughtworks.xstream.converters;version=\"[1.4,2)\",com.though\n tworks.xstream.core;version=\"[1.4,2)\""))))
+;;
+;; ----------------------------------------------------------------------------------------------
+;; # Manifest Parsing - Document Cases - Import Package
+;; ----------------------------------------------------------------------------------------------
+;;
 
-(deftest parse-import-service
-  (is (= {::mf/Import-Service '("org.codice.ddf.cxf.client.ClientFactoryFactory"
-                                 "ddf.catalog.filter.FilterAdapter"
-                                 "ddf.catalog.data.MetacardType"
-                                 "com.thoughtworks.xstream.converters.Converter"
-                                 "ddf.catalog.event.EventProcessor"
-                                 "ddf.catalog.transform.MetacardTransformer"
-                                 "ddf.catalog.transform.QueryFilterTransformerProvider"
-                                 "ddf.security.service.SecurityManager"
-                                 "org.codice.ddf.security.Security"
-                                 "ddf.catalog.transform.QueryResponseTransformer"
-                                 "ddf.catalog.transform.InputTransformer"
-                                 "ddf.catalog.filter.FilterBuilder"
-                                 "ddf.catalog.CatalogFramework"
-                                 "org.codice.ddf.spatial.ogc.csw.catalog.endpoint.transformer.CswActionTransformer"
-                                 "ddf.catalog.data.AttributeRegistry")}
-         (mf/parse-content "Import-Service: org.codice.ddf.cxf.client.ClientFactoryFactory;multiple:\n =false,ddf.catalog.filter.FilterAdapter;multiple:=false,ddf.catalog.dat\n a.MetacardType;multiple:=false;filter=(name=csw:Record),com.thoughtwork\n s.xstream.converters.Converter;multiple:=false;filter=(id=csw),ddf.cata\n log.event.EventProcessor;multiple:=false,ddf.catalog.transform.Metacard\n Transformer;multiple:=true,ddf.catalog.transform.QueryFilterTransformer\n Provider;multiple:=false,ddf.security.service.SecurityManager;multiple:\n =false,org.codice.ddf.security.Security;multiple:=false,ddf.catalog.tra\n nsform.QueryResponseTransformer;multiple:=true,ddf.catalog.transform.In\n putTransformer;multiple:=true;filter=(|(mime-type=application/xml)(mime\n -type=text/xml)),ddf.catalog.filter.FilterBuilder;multiple:=false,ddf.c\n atalog.CatalogFramework;multiple:=false,org.codice.ddf.spatial.ogc.csw.\n catalog.endpoint.transformer.CswActionTransformer;multiple:=true;availa\n bility:=optional,ddf.catalog.data.AttributeRegistry;multiple:=false"))))
+(deftest parse-doc-import-package-all-entries-have-attrs
+  (is (= {::mf/Import-Package
+          '("com.google.common.collect"
+             "com.google.common.escape"
+             "com.google.common.html"
+             "com.google.common.io"
+             "com.google.gson"
+             "com.google.gson.reflect"
+             "com.google.gson.stream"
+             "ddf.security"
+             "ddf.security.permission"
+             "javax.annotation"
+             "org.apache.commons.collections"
+             "org.apache.commons.collections4.map"
+             "org.apache.commons.io"
+             "org.apache.commons.lang"
+             "org.apache.commons.lang.text"
+             "org.apache.shiro"
+             "org.apache.shiro.authz"
+             "org.apache.shiro.subject"
+             "org.bouncycastle.crypto"
+             "org.bouncycastle.crypto.digests"
+             "org.bouncycastle.crypto.prng"
+             "org.bouncycastle.crypto.prng.drbg"
+             "org.codice.ddf.admin.core.api"
+             "org.codice.ddf.admin.core.api.jmx"
+             "org.codice.ddf.configuration"
+             "org.codice.ddf.persistence"
+             "org.codice.ddf.ui.admin.api.module"
+             "org.codice.ddf.ui.admin.api.plugin"
+             "org.json.simple"
+             "org.json.simple.parser"
+             "org.osgi.framework"
+             "org.osgi.resource"
+             "org.osgi.service.blueprint"
+             "org.osgi.service.cm"
+             "org.osgi.service.event"
+             "org.osgi.service.log"
+             "org.osgi.service.metatype"
+             "org.osgi.service.repository"
+             "org.osgi.util.tracker"
+             "org.slf4j")}
+         (mf/parse-file ip-attrs-all))))
 
-#_(deftest package-lines-split-delim-only
-    (is (= [] (mf/-sp-comma ",")) "Splitting on delimiter alone should yield no results")
-    (is (= [] (mf/-sp-comma ",,,,")) "Splitting on delimiter alone should yield no results"))
+(deftest parse-doc-import-package-no-entries-have-attrs
+  (is (= {::mf/Import-Package '()}
+         (mf/parse-file ip-no-attrs))))
 
-#_(deftest package-lines-split-version-range-only
-    (is (= ["(2.8,3)"] (mf/-sp-comma "(2.8,3)")) "Version range should be immune to splitting")
-    (is (= ["[2.8,3)"] (mf/-sp-comma "[2.8,3)")) "Version range should be immune to splitting")
-    (is (= ["(2.8,3]"] (mf/-sp-comma "(2.8,3]")) "Version range should be immune to splitting")
-    (is (= ["[2.8,3]"] (mf/-sp-comma "[2.8,3]")) "Version range should be immune to splitting"))
+(deftest parse-doc-import-package-no-entries-have-attrs-with-carriage-returns
+  (is (= {::mf/Import-Package '()}
+         (mf/parse-file ip-no-attrs-carriage))))
 
-#_(deftest package-simple-lines-split-correctly
-    (is (= ["org.one"]
-           (mf/-sp-comma "org.one"))
-        "Simple packages should be getting split")
+;;
+;; ----------------------------------------------------------------------------------------------
+;; # Manifest Parsing - Document Cases - Import Service
+;; ----------------------------------------------------------------------------------------------
+;;
 
-    (is (= ["org.one" "org.two"]
-           (mf/-sp-comma "org.one,org.two"))
-        "Simple packages should be getting split")
+(deftest parse-doc-import-service-basic
+  (is (= {::mf/Import-Service
+          '("ddf.catalog.transform.MetacardTransformer"
+             "ddf.catalog.transform.InputTransformer"
+             "ddf.catalog.transform.QueryFilterTransformer"
+             "ddf.action.ActionProvider"
+             "ddf.catalog.transformer.api.PrintWriterProvider")}
+         (mf/parse-file is-basic))))
 
-    (is (= ["org.one" "org.two" "org.three"]
-           (mf/-sp-comma "org.one,org.two,org.three"))
-        "Simple packages should be getting split"))
-
-#_(deftest package-lines-with-versions-split-correctly
-    (is (= ["my.test.thing" "my.other.thing;version=\"[2.8,3)\""]
-           (mf/-sp-comma "my.test.thing,my.other.thing;version=\"[2.8,3)\""))
-        "Packages with versions should be getting split")
-
-    (is (= ["[2.8,3)\"" "net.opengis.cat.csw.v_2_0_2.dc.elements;version=\"[2.8,3)\"" "net."]
-           (mf/-sp-comma "[2.8,3)\",net.opengis.cat.csw.v_2_0_2.dc.elements;version=\"[2.8,3)\",net."))
-        "Packages between versions should be getting split"))
-
-#_(deftest package-simple-names-detected
-    (is (= "javax.activation" (mf/-sp-package "javax.activation"))
-        "Simple package should be detected")
-    (is (= "javax.xml.ws.handler" (mf/-sp-package "javax.xml.ws.handler"))
-        "Simple package should be detected"))
-
-#_(deftest package-numeric-names-detected
-    (is (= "org.v1" (mf/-sp-package "org.v1"))
-        "Numeric characters should be supported in packages after the root (org.v1)")
-    (is (= "org.xmlpull.v1" (mf/-sp-package "org.xmlpull.v1"))
-        "Numeric characters should be supported in packages after the root (org.xmlpull.v1)"))
-
-#_(deftest package-names-with-version-detected
-    (is (= "com.thoughtworks.xstream.security"
-           (mf/-sp-package "com.thoughtworks.xstream.security;version=\"[1.4,2)\""))
-        "Package with OSGi version info should be extractable"))
-
-#_(deftest class-names-with-blueprint-info-detected
-    (is (= "ddf.catalog.event.Subscriber"
-           (mf/-sp-package
-             "ddf.catalog.event.Subscriber;osgi.service.blueprint.compname=CswSubscriptionSvc"))
-        "Class with blueprint info should be extractable"))
-
-#_(deftest package-or-class-names-with-properties-detected
-    (is (= "org.codice.ddf.spatial.ogc.csw.catalog.endpoint.mappings"
-           (mf/-sp-package
-             (str "org.codice.ddf.spatial.ogc.csw.catalog.endpoint.mappings;"
-                  "uses:=\"org.codice.ddf.spatial.ogc.csw.catalog.endpoint.transformer")))
-        "Package with uses:= metadata should be extractable")
-
-    (is (= "ddf.catalog.transform.InputTransformer"
-           (mf/-sp-package
-             (str "ddf.catalog.transform.InputTransformer;"
-                  "multiple:=true;filter=(|(mime-type=application/xml)(mime-type=text/xml))")))
-        "Class name with multiple:= & filter= metadata should be extractable")
-
-    (is (= "ddf.catalog.transform.QueryFilterTransformer"
-           (mf/-sp-package
-             (str "ddf.catalog.transform.QueryFilterTransformer;id:List<String>"
-                  "=\"{http://www.opengis.net/cat/csw/2.0.2}Record")))
-        "Interface name with type metadata should be extractable"))
-
-#_(deftest package-or-class-noise-and-extra-data-ignored
-    (is (= nil (mf/-sp-package "gmd:MD_Metadata"))
-        "Noisy data should be omitted (gmd:MD_Metadata)")
-
-    (is (= nil (mf/-sp-package (str "{urn:oasis:names:tc:ebxml-regrep:xsd:rim:3.0}"
-                                    "RegistryPackage\";typeNames:List<String>=\"csw:Record")))
-        "Noisy data should be omitted ({urn:oasis:names)")
-
-    (is (= nil (mf/-sp-package "{http://www.isotc211.org/2005/gmd}MD_Metadata"))
-        "Noisy data should be omitted ({http://www.isotc211.org/2005/gmd})")
-
-    (is (= nil (mf/-sp-package
-                 "rim:RegistryPackage\";osgi.service.blueprint.compname=cswQueryFilterTransformer"))
-        "Noisy data should be omitted (rim:RegistryPackage)"))
+(deftest parse-doc-import-service-basic-with-carriage-returns
+  (is (= {::mf/Import-Service
+          '("ddf.catalog.transform.MetacardTransformer"
+             "ddf.catalog.transform.InputTransformer"
+             "ddf.catalog.transform.QueryFilterTransformer"
+             "ddf.action.ActionProvider"
+             "ddf.catalog.transformer.api.PrintWriterProvider")}
+         (mf/parse-file is-basic-carriage))))

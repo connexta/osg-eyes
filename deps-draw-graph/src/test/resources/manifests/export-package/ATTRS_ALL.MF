@@ -1,0 +1,15 @@
+Export-Package: net.opengis.cat.csw.v_2_0_2.dc.elements;version="2.19.
+ 14";uses:="javax.xml.bind,javax.xml.bind.annotation",net.opengis.cat.
+ csw.v_2_0_2.dc.terms;version="2.19.14";uses:="javax.xml.bind,javax.xm
+ l.bind.annotation,net.opengis.cat.csw.v_2_0_2.dc.elements",net.opengi
+ s.cat.csw.v_2_0_2;version="2.19.14";uses:="javax.xml.bind,javax.xml.b
+ ind.annotation,javax.xml.bind.annotation.adapters,javax.xml.datatype,
+ javax.xml.namespace,net.opengis.cat.csw.v_2_0_2.dc.elements,net.openg
+ is.filter.v_1_1_0,net.opengis.ows.v_1_0_0,org.w3c.dom",net.opengis.fi
+ lter.v_1_1_0;version="2.19.14";uses:="javax.xml.bind,javax.xml.bind.a
+ nnotation,javax.xml.bind.annotation.adapters,javax.xml.namespace,net.
+ opengis.gml.v_3_1_1",net.opengis.ows.v_1_0_0;version="2.19.14";uses:=
+ "javax.xml.bind,javax.xml.bind.annotation,javax.xml.bind.annotation.a
+ dapters,org.w3c.dom",net.opengis.gml.v_3_1_1;version="2.19.14";uses:=
+ "javax.xml.bind,javax.xml.bind.annotation,javax.xml.bind.annotation.a
+ dapters,javax.xml.datatype,org.w3c.dom"

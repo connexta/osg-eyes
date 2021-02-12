@@ -1,0 +1,8 @@
+Export-Service: ddf.catalog.endpoint.CatalogEndpoint;osgi.service.blue
+ print.compname=ddf.catalog.endpoint.csw,ddf.catalog.event.Subscriber;
+ osgi.service.blueprint.compname=CswSubscriptionSvc,ddf.catalog.transf
+ orm.QueryFilterTransformer;id:List<String>="{http://www.opengis.net/c
+ at/csw/2.0.2}Record,{http://www.isotc211.org/2005/gmd}MD_Metadata,{ur
+ n:oasis:names:tc:ebxml-regrep:xsd:rim:3.0}RegistryPackage";typeNames:
+ List<String>="csw:Record,gmd:MD_Metadata,rim:RegistryPackage";osgi.se
+ rvice.blueprint.compname=cswQueryFilterTransformer

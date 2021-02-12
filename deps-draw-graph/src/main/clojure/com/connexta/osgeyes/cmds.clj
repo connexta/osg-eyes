@@ -494,7 +494,30 @@
   (export-graph :select [:node "ddf/.*"])
   (list-edges)
   (draw-graph)
-  (open-tmp-dir))
+  (open-tmp-dir)
+
+  "Import-Package: javax.activation\r"
+  "Import-Package: javax.xml.bind,javax.xml.bind.annotation.adapters,java\\r\n x.xml.transform,org.w3c.dom"
+  "Export-Service: org.codice.ddf.branding.BrandingPlugin\\r"
+  "Export-Service: org.codice.ddf.admin.application.plugin.ApplicationPlu\\r\n gin"
+
+  (index/open-indexer!)
+  (frequencies)
+  (manifest/parse-content "Export-Package: this.package.exported;also.this.one;and.this.one;")
+  (manifest/parse-content "Export-Package: this.package.exported,also.this.one,and.this.one;")
+  (->> default-gather
+       (map gav)
+       (map #(aggregate-with-all (:g %) (:a %) (:v %)))
+       (apply merge)
+       ;; catalog-core-api
+       #_(and (.contains m "Export-Service:")
+              (> ecount 3)
+              (not (.contains m ";"))
+              (not (.contains m "uses:="))
+              (not (.contains m "version=")))
+       #_(filter #(let [m (get-in (val %) [:manifest ::manifest/Export-Service])]
+                    (if (nil? m) false (not (.contains m ";")))))
+       #_(into {})))
 
 ;; ----------------------------------------------------------------------------------------------
 ;; ----------------------------------------------------------------------------------------------

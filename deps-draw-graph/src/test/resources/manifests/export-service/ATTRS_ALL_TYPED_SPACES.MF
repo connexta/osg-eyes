@@ -1,0 +1,24 @@
+Export-Service: ddf.catalog.transform.MetacardTransformer;id=csw:Recor
+ d;mime-type:List<String>="text/xml,application/xml";schema=http://www
+ .opengis.net/cat/csw/2.0.2;schema-location=csw/2.0.2/record.xsd;displ
+ ayName=CSW Record XML;osgi.service.blueprint.compname=cswRecordConver
+ ter,ddf.catalog.data.MetacardType;name=csw:Record;osgi.service.bluepr
+ int.compname=cswMetacardType,ddf.catalog.transform.MetacardTransforme
+ r;id=gmd:MD_Metadata;mime-type=text/xml;schema=http://www.isotc211.or
+ g/2005/gmd;schema-location=gmd/record_gmd.xsd;displayName=GMD Metadat
+ a;osgi.service.blueprint.compname=gmdInputTransformerTranformer,ddf.c
+ atalog.data.MetacardType;name=gmd:MD_Metadata;osgi.service.blueprint.
+ compname=gmdMetacardType,ddf.catalog.transform.QueryFilterTransformer
+ Provider;id=cswFilter;osgi.service.blueprint.compname=cswQueryFilterT
+ ransformerProvider,ddf.catalog.transform.QueryResponseTransformer;id=
+ csw:Record;mime-type:List<String>="text/xml,application/xml";schema=h
+ ttp://www.opengis.net/cat/csw/2.0.2;displayName=CSW Record XML;osgi.s
+ ervice.blueprint.compname=CswQueryResponseTransformer,com.thoughtwork
+ s.xstream.converters.Converter;id=csw;osgi.service.blueprint.compname
+ =cswTransformProvider,ddf.catalog.transform.InputTransformer;id=csw:R
+ ecord;mime-type:List<String>="text/xml,application/xml";schema=http:/
+ /www.opengis.net/cat/csw/2.0.2;osgi.service.blueprint.compname=cswRec
+ ordConverter,ddf.catalog.transform.InputTransformer;id=gmd:MD_Metadat
+ a;mime-type:List<String>="text/xml,application/xml";schema=http://www
+ .isotc211.org/2005/gmd;osgi.service.blueprint.compname=gmdInputTransf
+ ormerTranformer

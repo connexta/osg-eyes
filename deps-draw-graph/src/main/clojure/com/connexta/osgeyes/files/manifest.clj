@@ -22,7 +22,7 @@
   The current capabilities are sufficient that a crude bundle graph could be generated from the
   data."
 
-  (:require [clojure.string :as string]
+  (:require [clojure.string :as str]
             [com.connexta.osgeyes.env :as env])
   (:import (java.io StringReader BufferedReader)))
 
@@ -157,13 +157,13 @@
       "(?=;)")))
 
 (defn- handle-basic-csv [[k v]]
-  [k (apply list (string/split v #","))])
+  [k (apply list (str/split v #","))])
 
 (defn- handle-osgi-packages-and-classes [[k v]]
   [k (map first (re-seq package-or-class-matcher v))])
 
 (defn- handle-bundle-symbolic-name [[k v]]
-  [k (first (string/split v #";"))])
+  [k (first (str/split v #";"))])
 
 (defmulti ^:private parse-attr
           "Parses the manfiest attribute value according to its name. Expected
@@ -209,35 +209,40 @@
 (defn- parse-path-to-lines
   [path]
   (with-open [rdr (clojure.java.io/reader path)]
-    (doall (line-seq rdr))))
+    (doall (filter #(not= "" %) (line-seq rdr)))))
 
 (defn- parse-string-to-lines
   [raw-string]
   (with-open [rdr (BufferedReader. (StringReader. raw-string))]
-    (doall (line-seq rdr))))
+    (doall (filter #(not= "" %) (line-seq rdr)))))
 
 (defn- valid-manifest?
-  "Ensures the first line of the manifest does not begin with whitespace."
+  "Ensures the manifest is not empty. Ensures the first line of the manifest does not begin
+  with whitespace."
   [path lines]
-  (if (string/starts-with? (first lines) " ")
-    (throw (IllegalArgumentException.
-             (str "Manifest file " path " should not start with whitespace")))
-    lines))
+  (cond (nil? (first lines))
+        (throw (IllegalArgumentException.
+                 (str "Manifest file " path " should not be empty")))
+        (str/starts-with? (first lines) " ")
+        (throw (IllegalArgumentException.
+                 (str "Manifest file " path " should not start with whitespace")))
+        :default
+        lines))
 
 (defn- reduce-lines
   "Aggregates manifest lines according to attribute, where val is expected to be the target
   vector of strings for the aggregation, and next is the next line from the manifest file."
   [val next]
-  (if (string/starts-with? next " ")
+  (if (str/starts-with? next " ")
     (update val
             (- (count val) 1)
-            #(str % (string/trim next)))
+            #(str % (str/trim next)))
     (conj val next)))
 
 (defn- line->pair
   "Converts a single line of the manifest into a key-value pair, in this case a size-2 vector."
   [line]
-  (let [kv-split (string/split line #": " 2)
+  (let [kv-split (str/split line #": " 2)
         k (keyword namespace-name (first kv-split))
         v (last kv-split)]
     (when (or (nil? line) (.isEmpty line))
@@ -256,11 +261,11 @@
     (map check pairs)))
 
 (defn parse-file
-  "Parses the text of a jar's manifest from a file pointed to by the path, passed as a string."
+  "Parses the text of a JAR manifest from a file pointed to by the path to the manifest, passed as
+  a string."
   [path]
   (->> path
        parse-path-to-lines
-       (filter #(not= "" %))
        (valid-manifest? path)
        (reduce reduce-lines [])
        (map line->pair)
@@ -269,14 +274,27 @@
        (into {})))
 
 (defn parse-content
-  "Parses the text of a jar's manifest from the already loaded string content of the file."
+  "Parses the text of a JAR manifest from the already loaded string content of the manifest file."
   [content]
   (->> content
        parse-string-to-lines
-       (filter #(not= "" %))
-       (valid-manifest? "memory")
+       (valid-manifest? "(in-memory)")
        (reduce reduce-lines [])
        (map line->pair)
-       (valid-keys? "memory")
+       (valid-keys? "(in-memory)")
        (map parse-attr)
+       (into {})))
+
+(defn parse-content-plaintextattrs
+  "Parses the text of a JAR manifest from the already loaded string content of the manifest file.
+  Does not convert the attributes themselves into Clojure data but leaves each of them intact as
+  a clean, single-line string."
+  [content]
+  (->> content
+       parse-string-to-lines
+       (valid-manifest? "(in-memory)")
+       (reduce reduce-lines [])
+       (map line->pair)
+       (valid-keys? "(in-memory)")
+       ;; Skipping parse-attr call
        (into {})))
