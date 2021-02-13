@@ -1,0 +1,3 @@
+Export-Service: org.codice.ddf.spatial.geocoding.FeatureExtractor,org.
+ codice.ddf.spatial.geocoding.FeatureQueryable,org.codice.ddf.spatial.
+ geocoding.FeatureIndexer

@@ -1,0 +1,12 @@
+Embedded-Artifacts: spatial-ogc-common-2.19.14.jar;g="org.codice.ddf.s
+ patial";a="spatial-ogc-common";v="2.19.14",spatial-csw-common-2.19.14
+ .jar;g="org.codice.ddf.spatial";a="spatial-csw-common";v="2.19.14",sp
+ atial-csw-transformer-2.19.14.jar;g="org.codice.ddf.spatial";a="spati
+ al-csw-transformer";v="2.19.14",catalog-core-api-impl-2.19.14.jar;g="
+ ddf.catalog.core";a="catalog-core-api-impl";v="2.19.14",platform-util
+ -2.19.14.jar;g="ddf.platform.util";a="platform-util";v="2.19.14",ddf-
+ security-common-2.19.14.jar;g="ddf.security";a="ddf-security-common";
+ v="2.19.14",geospatial-2.19.14.jar;g="org.codice.ddf";a="geospatial";
+ v="2.19.14",platform-util-unavailableurls-2.19.14.jar;g="ddf.platform
+ .util";a="platform-util-unavailableurls";v="2.19.14",commons-lang3-3.
+ 8.1.jar;g="org.apache.commons";a="commons-lang3";v="3.8.1"

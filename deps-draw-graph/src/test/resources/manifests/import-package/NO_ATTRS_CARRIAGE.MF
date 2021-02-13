@@ -1,0 +1,4 @@
+Import-Package: com.sun.xml.bind.api.impl,com.sun.xml.bind.v2.model.co
+ re,javax.activation,javax.xml.bind,javax.xml.bind.annotation,javax.xm
+ l.bind.annotation.adapters,javax.xml.datatype,javax.xml.namespace,org
+ .w3c.dom,org.xml.sax

@@ -1,0 +1,35 @@
+Manifest-Version: 1.0
+Bnd-LastModified: 1601586379376
+Build-Jdk: 1.8.0_191
+Built-By: root
+Bundle-Blueprint: OSGI-INF/blueprint/cxf-sts.xml,OSGI-INF/blueprint/to
+ kenstore.xml
+Bundle-ClassPath: .,security-sts-x509delegationhandler-2.19.14.jar,htt
+ pclient-4.5.6.jar,httpcore-4.4.10.jar,platform-util-unavailableurls-2
+ .19.14.jar,ddf-security-common-2.19.14.jar,platform-util-2.19.14.jar
+Bundle-Description: Distributed Data Framework (DDF) Parent
+Bundle-DocURL: http://codice.org
+Bundle-License: http://www.gnu.org/licenses/lgpl.html
+Bundle-ManifestVersion: 2
+Bundle-Name: DDF :: Security :: STS :: Server
+Bundle-SymbolicName: security-sts-server
+Bundle-Vendor: Codice Foundation
+Bundle-Version: 2.19.14
+Created-By: Apache Maven Bundle Plugin
+Embed-Dependency: security-sts-x509delegationhandler
+Embedded-Artifacts: security-sts-x509delegationhandler-2.19.14.jar;g="
+ ddf.security.sts";a="security-sts-x509delegationhandler";v="2.19.14"
+Export-Service: org.apache.cxf.sts.claims.ClaimsHandler
+Export-Package: org.codice.ddf.security.common;version="2.19.14";uses:
+ ="ddf.security,ddf.security.service,javax.annotation,javax.servlet.ht
+ tp,javax.xml.ws.handler,org.apache.cxf.interceptor,org.apache.cxf.jax
+ ws.context,org.apache.cxf.message,org.apache.cxf.phase,org.apache.cxf
+ .transport.http"
+Import-Package: javax.net.ssl,net.sf.ehcache;version="[2.5,3.0.0)",net
+ .sf.ehcache.config;version="[2.5,3.0.0)",com.google.common.cache;vers
+ ion="[25.1,26)",com.hazelcast.core;resolution:=optional
+Import-Service: org.apache.cxf.sts.claims.ClaimsHandler;multiple:=true
+ ;availability:=optional,org.apache.cxf.sts.token.validator.TokenValid
+ ator;multiple:=true;availability:=optional
+Require-Capability: osgi.ee;filter:="(&(osgi.ee=JavaSE)(version=1.8))"
+Tool: Bnd-3.5.0.201709291849

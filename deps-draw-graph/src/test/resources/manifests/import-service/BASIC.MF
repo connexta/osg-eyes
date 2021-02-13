@@ -1,0 +1,6 @@
+Import-Service: ddf.catalog.transform.MetacardTransformer;multiple:=tr
+ ue,ddf.catalog.transform.InputTransformer;multiple:=true,ddf.catalog.
+ transform.QueryFilterTransformer;multiple:=true;availability:=optiona
+ l,ddf.action.ActionProvider;multiple:=false;filter=id=catalog.data.me
+ tacard.resource,ddf.catalog.transformer.api.PrintWriterProvider;multi
+ ple:=false;filter=(id=print.writer.provider)

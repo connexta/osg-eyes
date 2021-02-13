@@ -1,0 +1,24 @@
+Manifest-Version: 1.0
+Bnd-LastModified: 1601586379376
+Build-Jdk: 1.8.0_191
+Built-By: root
+Bundle-Blueprint: OSGI-INF/blueprint/cxf-sts.xml,OSGI-INF/blueprint/to
+ kenstore.xml
+Bundle-ClassPath: .,security-sts-x509delegationhandler-2.19.14.jar
+Bundle-Description: Distributed Data Framework (DDF) Parent
+Bundle-DocURL: http://codice.org
+Bundle-License: http://www.gnu.org/licenses/lgpl.html
+Bundle-ManifestVersion: 2
+Bundle-Name: DDF :: Security :: STS :: Server
+Bundle-SymbolicName: security-sts-server
+Bundle-Vendor: Codice Foundation
+Bundle-Version: 2.19.14
+Created-By: Apache Maven Bundle Plugin
+Embed-Dependency: security-sts-x509delegationhandler
+Embedded-Artifacts: security-sts-x509delegationhandler-2.19.14.jar
+Export-Service: org.apache.cxf.sts.claims.ClaimsHandler
+Export-Package: org.codice.ddf.security.common
+Import-Package: javax.net.ssl,net.sf.ehcache
+Import-Service: org.apache.cxf.sts.claims.ClaimsHandler
+Require-Capability: osgi.ee;filter:="(&(osgi.ee=JavaSE)(version=1.8))"
+Tool: Bnd-3.5.0.201709291849
