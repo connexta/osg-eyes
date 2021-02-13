@@ -1,4 +1,4 @@
-(ns com.connexta.osgeyes.options
+(ns com.connexta.osgeyes.graph.query
   "Transforms, validation, and support for managing the complete data structure
   that details how to select data and assemble an end result, often a graph.")
 

@@ -1,4 +1,4 @@
-(ns com.connexta.osgeyes.cmds
+(ns com.connexta.osgeyes.graph.cmds
 
   "This is the CLI interface of the application, literally speaking. This is the namespace that
   is pre-loaded into the REPLy instance. Public functions that live here will be discoverable by
@@ -7,10 +7,10 @@
 
   (:use [loom.graph]
         [loom.attr])
-  (:require [com.connexta.osgeyes.env :as env]
-            [com.connexta.osgeyes.graph :as graph]
-            [com.connexta.osgeyes.options :as opts]
-            [com.connexta.osgeyes.files.manifest :as manifest]
+  (:require [com.connexta.osgeyes.graph.env :as env]
+            [com.connexta.osgeyes.graph.export :as export]
+            [com.connexta.osgeyes.graph.query :as query]
+            [com.connexta.osgeyes.graph.connectors.manifest :as manifest]
             [com.connexta.osgeyes.index.core :as index]
             [ubergraph.core :as uber])
   (:import (java.awt Desktop)
@@ -107,8 +107,8 @@
                  :select/ds-catalog-only  [:node "ds/.*" :node ".*/catalog.*"]}
 
    ;; Presentation options by name, the fn's don't exist they're just examples
-   :present     {:present/example [(graph/clustering :gen 3)
-                                   (graph/coloring "ddf" :blue)]}
+   :present     {:present/example [(export/clustering :gen 3)
+                                   (export/coloring "ddf" :blue)]}
 
    ;; Defaults that fire when omitted on the CLI
    :defaults    {:gathering :gather/ddf-2.19.5
@@ -440,7 +440,7 @@
          (map #(aggregate-with-all (:g %) (:a %) (:v %)))
          (apply merge)
          (artifacts->edges)
-         (filter (opts/selection->predicate select))
+         (filter (query/selection->predicate select))
          ;; optionally print duplicate dependencies for each cause
          (#(if cause? % (distinct (map dissoc-cause %))))
          ;; optionally print the type of edge
@@ -464,9 +464,9 @@
        (map #(aggregate-with-all (:g %) (:a %) (:v %)))
        (apply merge)
        (artifacts->edges)
-       (filter (opts/selection->predicate select))
-       (graph/gen-html-from-edges)
-       (graph/!write-html)
+       (filter (query/selection->predicate select))
+       (export/gen-html-from-edges)
+       (export/!write-html)
        (!open-file-in-browser)))
 
 (defn export-graph
@@ -485,9 +485,9 @@
        #_(artifacts->edges)
        (create-graph-with-attrs)
        ;; Fix filtering later TODO
-       #_(filter (opts/selection->predicate select))
-       (graph/gen-graphml-from-graph)
-       (graph/!write-graphml)
+       #_(filter (query/selection->predicate select))
+       (export/gen-graphml-from-graph)
+       (export/!write-graphml)
        (#(str "Exported to " % (System/lineSeparator) "Call (open-tmp-dir) to navigate there."))))
 
 (comment

@@ -1,11 +1,11 @@
-(ns com.connexta.osgeyes.env
+(ns com.connexta.osgeyes.graph.env
 
   "Env only exists to deal with environment-specific things. It provides functions for
   interacting with system configuration and resolving relative paths to repository files.
   It also helps keep comment blocks and code literals free of absolute path details when
   experimenting with local files in the REPL."
 
-  (:require [clojure.string :as string])
+  (:require [clojure.string :as str])
   (:import (java.io File)))
 
 (def ^:private tmp-dir (System/getProperty "java.io.tmpdir"))
@@ -15,12 +15,12 @@
 
 (defn- resolve-as [target-root rel-path]
   (let [root
-        (if (string/ends-with? target-root "/")
+        (if (str/ends-with? target-root "/")
           target-root
           (str target-root "/"))
         ;; Make this OS agnostic later
         rest-of-path
-        (if (string/starts-with? rel-path "/")
+        (if (str/starts-with? rel-path "/")
           (throw (IllegalArgumentException.
                    (str "Path is absolute but should be relative: " rel-path)))
           rel-path)]
@@ -39,7 +39,7 @@
          (map #(.getName %))
          ;; Make sure results can be used in defs
          (filter #(not (.contains % " ")))
-         (filter #(not (string/starts-with? % "."))))))
+         (filter #(not (str/starts-with? % "."))))))
 
 (defn resolve-tmp "Resolves rel against tmp." [rel] (resolve-as tmp-dir rel))
 (defn resolve-subdir "Resolves rel against current working dir." [rel] (resolve-as app-dir rel))

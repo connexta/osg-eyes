@@ -4,7 +4,7 @@
   is provided by supplying code via REPLy's :custom-eval option."
 
   (:require [reply.main :as reply]
-            [com.connexta.osgeyes.env :as env]
+            [com.connexta.osgeyes.graph.env :as env]
             [com.connexta.osgeyes.index.core :as index]))
 
 ;; ----------------------------------------------------------------------
@@ -52,8 +52,8 @@
   (concat
     (list 'do
       '(ns osgeyes
-         (:require [com.connexta.osgeyes.env :as env])
-         (:use [com.connexta.osgeyes.cmds]))
+         (:require [com.connexta.osgeyes.graph.env :as env])
+         (:use [com.connexta.osgeyes.graph.cmds]))
       (list 'defn 'help "Displays the help text." [] application-help))
     (map #(list 'def (symbol %) %) (env/list-subdirs))))
 

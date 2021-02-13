@@ -1,4 +1,4 @@
-(ns com.connexta.osgeyes.files.manifest
+(ns com.connexta.osgeyes.graph.connectors.manifest
 
   "Support for parsing manifest files with OSGi metadata. The manifest is an example of a
   single 'layer' of dependency information. Another fitting term would be 'connector' since
@@ -23,7 +23,7 @@
   data."
 
   (:require [clojure.string :as str]
-            [com.connexta.osgeyes.env :as env])
+            [com.connexta.osgeyes.graph.env :as env])
   (:import (java.io StringReader BufferedReader)))
 
 (def ^:private namespace-name (.toString *ns*))

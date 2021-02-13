@@ -1,4 +1,4 @@
-(ns com.connexta.osgeyes.files.manifest-test
+(ns com.connexta.osgeyes.graph.connectors.manifest-test
   "Manifest parsing unit tests and sample data. There are several types of test cases detailed
   in this namespace:
   - Edge Assembly, verifies correct graph edge generation given an artifact map.
@@ -12,7 +12,7 @@
   difficult issues, use document cases that target the attribute in question.
   "
   (:require [clojure.test :refer :all]
-            [com.connexta.osgeyes.files.manifest :as mf]))
+            [com.connexta.osgeyes.graph.connectors.manifest :as mf]))
 
 (def manifests-home "src/test/resources/manifests/")
 

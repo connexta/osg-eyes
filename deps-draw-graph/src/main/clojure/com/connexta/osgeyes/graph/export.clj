@@ -1,10 +1,10 @@
-(ns com.connexta.osgeyes.graph
+(ns com.connexta.osgeyes.graph.export
   "Graph manipulation and rendering."
   (:use [loom.graph]
         [loom.attr])
-  (:require [com.connexta.osgeyes.env :as env]
+  (:require [com.connexta.osgeyes.graph.env :as env]
             [clojure.xml :as xml]
-            [clojure.string :as string]
+            [clojure.string :as str]
             [clojure.data.json :as json]
             [clojure.java.io :as io]))
 
@@ -65,7 +65,7 @@
   "Emits a graphml XML string given a root node."
   [root]
   (-> (with-out-str (xml/emit root))
-      (string/replace #"'" "\"")))
+      (str/replace #"'" "\"")))
 
 ;; <graphml xmlns="http://graphml.graphdrawing.org/xmlns">
 (defn- create-graphml-root
@@ -170,21 +170,14 @@
                        (create-graphml-key :cause :edge :string))]
     (->> (concat graphml-keys graphml-graph) (create-graphml-root) (graphml-write))))
 
-;; ----------------------------------------------------------------------
-;; # Graphs -> HTML
-;;
-;; Call chain for transforming Loom graphs into vis.js graphs for rendering.
-;;
-(comment
-  ;; note - multi-graphs not feasible
-  (let [g1 (-> (digraph [:a :b])
-               (add-attr-to-nodes :color "blue" [:a :b])
-               (add-attr-to-edges :color "navy" [[:a :b]]))
-        g2 (-> (digraph [:a :b])
-               (add-attr-to-nodes :color "green" [:a :b])
-               (add-attr-to-edges :color "sage" [[:a :b]]))]
-    (digraph g1 g2))
+(defn !write-graphml
+  "Writes the given string to the app's temp GRAPHML file and returns the path to that file."
+  [graphml]
+  (do (spit graphml-file graphml :create true) graphml-file))
 
+;; ----------------------------------------------------------------------
+
+(comment
   (let [graph (-> (digraph [:a :b] [:b :c] [:a :c])
                   (add-attr-to-nodes :color "lightblue" [:b :c])
                   (add-attr-to-edges :color "red" [[:a :b] [:b :c]])
@@ -196,6 +189,12 @@
         edges (map (graphml-edge-mapper graph) (edges graph))
         doc (list (create-graphml-graph (concat nodes edges)))]
     doc))
+
+;; ----------------------------------------------------------------------
+;; # Graphs -> HTML
+;;
+;; Call chain for transforming Loom graphs into vis.js graphs for rendering.
+;;
 
 (defn- json-for-nodes [graph]
   (->> graph
@@ -215,11 +214,6 @@
        vec
        json/write-str))
 
-;;
-;; The following functions should take a graph and return a graph
-;; They allow the inference of attributes from nodes and edges
-;;
-
 (defn- color-graph-by-qualstring [graph]
   (let [colors {"dd" "lightblue" "al" "wheat" "gs" "lightsalmon" "au" "lavender"}
         default "lightgray"]
@@ -230,42 +224,22 @@
               (add-attr %1 %2 :color (if (nil? c) default c)))
            graph))))
 
-(defn- enhance-graph [graph]
-  (-> graph
-      color-graph-by-qualstring))
-
-(defn- gen-html-from-graph
-  "Takes a loom graph and generates interactive HTML using the vis.js library."
-  [graph]
-  (let [g (enhance-graph graph)]
-    (-> viz-template
-        (string/replace
-          #"\"REPLACE_NODES\""
-          (json-for-nodes g))
-        (string/replace
-          #"\"REPLACE_EDGES\""
-          (json-for-edges g)))))
-
-(defn gen-graphml-from-edges
-  "Takes a coll of edges and generates interactive HTML using the vis.js library."
-  [edges]
-  (->> edges
-       (map #(vector (:from %) (:to %)))
-       (apply digraph)
-       (gen-graphml-from-graph)))
-
 (defn gen-html-from-edges
   "Takes a coll of edges and generates interactive HTML using the vis.js library."
   [edges]
-  (->> edges
-       (map #(vector (:from %) (:to %)))
-       (apply digraph)
-       (gen-html-from-graph)))
-
-(defn !write-graphml
-  "Writes the given string to the app's temp GRAPHML file and returns the path to that file."
-  [graphml]
-  (do (spit graphml-file graphml :create true) graphml-file))
+  (let [graph->html
+        #(-> viz-template
+             (str/replace
+               #"\"REPLACE_NODES\""
+               (json-for-nodes %))
+             (str/replace
+               #"\"REPLACE_EDGES\""
+               (json-for-edges %)))]
+    (->> edges
+         (map #(vector (:from %) (:to %)))
+         (apply digraph)
+         (color-graph-by-qualstring)
+         (graph->html))))
 
 (defn !write-html
   "Writes the given string to the app's temp HTML file and returns the path to that file."
