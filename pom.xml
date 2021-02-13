@@ -19,7 +19,7 @@
         <maven.assembly.version>3.3.0</maven.assembly.version>
         <maven.release.version>2.5.3</maven.release.version>
         <!--  Java  -->
-        <junit.version>4.12</junit.version>
+        <junit.version>4.13.1</junit.version>
         <!--  Clojure  -->
         <clojure.lang.version>1.10.1</clojure.lang.version>
         <clojure.data.json.version>1.0.0</clojure.data.json.version>
