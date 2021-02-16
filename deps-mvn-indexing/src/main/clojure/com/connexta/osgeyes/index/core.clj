@@ -102,7 +102,7 @@
       ((apply comp tforms) blank-options)
       (throw (IllegalArgumentException. (str "Invalid options specified: " opts))))))
 
-(defn- lookfor
+(defn lookfor
   "Used like criteria.of(...) for key-value args or key-value-options args. In this case the
   options arg is a set of keywords that will flag search behavior for the predicate it's
   specified for."
@@ -113,27 +113,17 @@
      (-> (get-criteria) (.of (keyword->field key) val))
      (-> (get-criteria) (.of (keyword->field key) val (make-criteria-options opts))))))
 
-(defn- lookfor-all
+(defn lookfor-all
   "Used like criteria.of(...) for combining collections of other criteria."
   [& criteria]
   (-> (get-criteria) (.of (into-array criteria))))
 
-(defn- query-mvn
+(defn query-mvn
   "Wrapper for IndexingApp#searchArtifacts."
   [criteria]
   (map artifact-info->map (-> (get-indexing-app) (.searchArtifacts criteria))))
 
 (comment
-  ;; It's possible that gather-hierarchy code might be part of the problem (dupes getting through)
-  (count (query-mvn
-           (lookfor-all
-             (lookfor :artifact-id "proxy-camel-servlet")
-             (lookfor :version "2.19.14"))))
-  (count (query-mvn
-           (lookfor-all
-             (lookfor :artifact-id "proxy-camel-servlet")
-             (lookfor :version "2.19.14")
-             (lookfor :file-ext "jar"))))
 
   ;; All ddf reactor poms
   (query-mvn
@@ -189,71 +179,9 @@
    (map artifact-info->map (do-gather-hierarchy g a v))))
 
 (comment
-  (filter #(and (= "bundle" (:packaging %))
-                (.contains (:artifact-id %) "core")
-                (.contains (:artifact-id %) "security"))
-          (gather-hierarchy "ddf" "2.19.14"))
-
   (open-indexer!)
   (gather-hierarchy "ddf" "2.23.1")
   (count (gather-hierarchy "ddf" "2.23.1"))
-  (filter #(not (or (:classifier %) (:file-name %) (:path %))) (gather-hierarchy "ddf" "2.19.5"))
-
-  ;;
-  ;; Verify these on both sides of the fix
-  (open-indexer!)
-  ;; 7
-  (count (query-mvn
-           (lookfor-all
-             (lookfor :artifact-id "pax-web*")
-             (lookfor :file-ext "xml"))))
-  ;; 31
-  (count (query-mvn
-           (lookfor :file-ext "cfg")))
-  ;; 2
-  (count (query-mvn
-           (lookfor :file-ext "yml")))
-  ;; 7
-  (count (query-mvn
-           (lookfor :file-ext "tar.gz")))
-  ;; 1068 - these should be zero
-  (count (query-mvn
-           (lookfor :file-ext "pom.lastUpdated")))
-
-  ;;
-  ;; Why are so many duplicate artifacts getting returned for ddf 2.19.14? TODO
-  ;; Using distinct works but can't tell how maven is treating them as separate
-  ;; Check classifier or other properties might be an indexer-core bug
-  (->> (gather-hierarchy "ddf" "2.19.14")
-       (filter #(= (:file-ext %) "jar"))
-       (filter #(= (:packaging %) "bundle"))
-       (count))
-  (->> (gather-hierarchy "ddf" "2.19.14")
-       (filter #(= (:file-ext %) "jar"))
-       (filter #(= (:packaging %) "bundle"))
-       (distinct)
-       (count))
-  ;;
-  ;; Cross-check, this one is fine, the presence of additional files (.lastUpdated) appear to be
-  ;; mucking with the indexer somehow
-  ;;
-  ;; Refer to ~/.m2/repository/org/codice/httpproxy/proxy-camel-servlet for an example
-  (->> (gather-hierarchy "ddf" "2.19.17-SNAPSHOT")
-       (filter #(= (:file-ext %) "jar"))
-       (filter #(= (:packaging %) "bundle"))
-       (count))
-  (->> (gather-hierarchy "ddf" "2.19.17-SNAPSHOT")
-       (filter #(= (:file-ext %) "jar"))
-       (filter #(= (:packaging %) "bundle"))
-       (distinct)
-       (count))
-  ;;
-  ;; Need to reinstall 2.19.5 to verify
-  (->> (gather-hierarchy "ddf" "2.19.5")
-       (filter #(= (:file-ext %) "jar"))
-       (filter #(= (:packaging %) "bundle"))
-       (count))
-
   (map #(artifact-info->map % #{:attrs}) (do-gather-hierarchy "ddf" "ddf" "2.19.5"))
   (map #(.toString %) (do-gather-hierarchy "ddf" "ddf" "2.19.5"))
   (close-indexer!))

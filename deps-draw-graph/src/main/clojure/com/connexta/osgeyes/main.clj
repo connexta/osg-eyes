@@ -53,7 +53,7 @@
     (list 'do
       '(ns osgeyes
          (:require [com.connexta.osgeyes.graph.env :as env])
-         (:use [com.connexta.osgeyes.graph.cmds]))
+         (:use [com.connexta.osgeyes.graph.core]))
       (list 'defn 'help "Displays the help text." [] application-help))
     (map #(list 'def (symbol %) %) (env/list-subdirs))))
 

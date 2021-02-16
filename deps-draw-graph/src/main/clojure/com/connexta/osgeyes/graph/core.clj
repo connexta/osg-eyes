@@ -1,4 +1,4 @@
-(ns com.connexta.osgeyes.graph.cmds
+(ns com.connexta.osgeyes.graph.core
 
   "This is the CLI interface of the application, literally speaking. This is the namespace that
   is pre-loaded into the REPLy instance. Public functions that live here will be discoverable by
@@ -15,130 +15,6 @@
             [ubergraph.core :as uber])
   (:import (java.awt Desktop)
            (java.io File)))
-
-;; ----------------------------------------------------------------------------------------------
-;; ----------------------------------------------------------------------------------------------
-;; # Development Notes
-;;
-;; Notes about data structures, new functions, and opportunities for planning
-;; ahead future capability iterations.
-;;
-;; ----------------------------------------------------------------------------------------------
-;;
-
-(comment
-  "Tentative game plan is to introduce concept of 'artifact facets' and avoid any indirection
-  besides basic selection attributes (i.e. use a :blueprint keyword if you want that data included,
-  etc). Also remember that an 'index' is currently just a Map of String 'repo/bundle-symbolic-name'
-  to manifest maps."
-
-  ;; Current representation
-  {"ddf/symbolic-name" {::manifest/Manifest-Version    "1.0"
-                        ::manifest/Bundle-SymbolicName "symbolic-name"
-                        #_etc}}
-
-  ;; Artifact facets ('facet map'), then 'facet maps' plural would be 'artifacts'
-  {"mvn:group/art/ver" {:manifest  {::manifest/Manifest-Version    "1.0"
-                                    ::manifest/Bundle-SymbolicName "symbolic-name"
-                                    #_etc}
-                        :pom       {}
-                        :blueprint {}
-                        :feature   {}
-                        #_etc}}
-
-  ;; Transform to get back to "old" way of doing it
-  (into {} (map #(vector %1 (get "manifest" %2))))
-
-  "Considering a way to manage facets so you needn't always make requests to the mvn-indexer module.
-  This could probably be done by simple import/export but the data needs to be more or less stable."
-
-  ;; Consider keeping import/export of 'facet' data
-  ;; Could also support JSON pretty easily
-  (defn facet-export [] ())
-  (defn facet-import [] ())
-
-  "Considering a way to change preferences or default options (gathering, selections, etc) during
-  runtime and then just re-dump the raw EDN each time."
-
-  ;; Consider adding a way to read, change, and clear options; such as the maven roots you want to
-  ;; gather for analysis.
-  (defn mvn-roots-show)
-  (defn mvn-roots-add)
-  (defn mvn-roots-clear)
-  ;; The maven roots, along with other stuff like selections, would be part of one big document of
-  ;; options that you manage.
-  (defn options-show)
-  ;; Maybe we add named configurations, which would be easy to reference on a CLI
-  (defn profile-add)
-  (defn profile-clear)
-
-  "Not actually sure how I feel about the below; might as well just use git at this point."
-
-  ;; Using the above as a foundation, what if we provide one level of backup in case we bork our
-  ;; options? Keeping options means we're stable and won't rollback; what we have now becomes our
-  ;; safety point. Rolling back options resets us to our last safety point or system defaults.
-  (defn options-keep)
-  (defn options-rollback)
-
-  "But we are definitely moving toward every command getting fed a full document (map) of options
-  which just get merged from varying levels of control (global defaults, user options, and anything
-  in the CLI input)."
-
-  ;; Need a more comprehensive 'config' definition which targets precisely what to do.
-  {:gather-from ["mvn:ddf/ddf/${VERSION}"
-                 "mvn:other/other/${VERSION}"]
-   :select      [:node "ddf/.*" :node ".*/catalog.*"]}
-
-  "I like this format - 'ds' being a downstream project of some sort."
-
-  {;; Manually specify named gathering configurations used to query maven and generate an initial
-   ;; seq of artifacts to process.
-   :gatherings  {:gather/ddf-2.19.5 ["mvn:ddf/ddf/2.19.5"]
-                 :gather/ddf-2.23.9 ["mvn:ddf/ddf/2.23.9"]
-                 :ds-1.0.5          ["mvn:ddf/ddf/2.19.5" "mvn:ds/ds/1.0.0"]
-                 :ds-1.8.2          ["mvn:ddf/ddf/2.23.9" "mvn:ds/ds/1.8.2"]}
-
-   ;; But depending on how the 'names' are referenced (i.e. a namespace is dynamically generated
-   ;; with keywords or symbols) why could we not just grab this info from GitHub?
-   :gatherings2 (poll-from "https:github.com/blah/blah" any other args)
-
-   ;; Selections by name, which can be composed on the CLI
-   :selections  {:select/ddf-catalog-only [:node "ddf/.*" :node ".*/catalog.*"]
-                 :select/ds-catalog-only  [:node "ds/.*" :node ".*/catalog.*"]}
-
-   ;; Presentation options by name, the fn's don't exist they're just examples
-   :present     {:present/example [(export/clustering :gen 3)
-                                   (export/coloring "ddf" :blue)]}
-
-   ;; Defaults that fire when omitted on the CLI
-   :defaults    {:gathering :gather/ddf-2.19.5
-                 :selection :select/ddf-catalog-only}
-
-   ;; Groups of named defaults that fire when omitted on the CLI
-   :profiles    {:my-profile {:gathering :gather/ddf-2.19.5
-                              :selection :select/ddf-catalog-only}}}
-
-  "Could qualify some special keywords just for the CLI REPL context so we get autocomplete. Since
-  all production code is qualified using 'com.connexta.osgeyes' it's probably not a big deal."
-
-  {:gather/ddf-2.19.5       ["mvn:ddf/ddf/2.19.5"]
-   :gather/ddf-2.23.9       ["mvn:ddf/ddf/2.23.9"]
-   :select/ddf-catalog-only [:node "ddf/.*" :node ".*/catalog.*"]
-   :select/ds-catalog-only  [:node "ds/.*" :node ".*/catalog.*"]}
-
-  "Eventually, with some pre/post-processing macros, the CLI could get very close to a flat,
-  traditional experience; it would be hard to tell the app was a Clojure REPL at all."
-
-  (draw-graph :gather :ddf-2.19.5 :select :ddf-catalog-only)
-  (draw-graph :profile :my-profile :select [])
-  (diff-graph :from :gather/ddf-2.19.5 :to :gather/ddf-2.23.9 :select/ddf-catalog-only)
-  (diff-graph from gather/ddf-2.19.5 to gather/ddf-2.23.9 select/ddf-catalog-only)
-
-  "Ultimately it might be worth (down the road) looking into a simple CLI wrapper that delegates to
-  the Clojure REPL so all the namespace dynamics are no longer necessary but that means portability
-  between environments might get sacrificed (if it isn't already). Those implications are unknown."
-
-  (comment))
 
 ;;
 ;; ----------------------------------------------------------------------------------------------
@@ -186,65 +62,6 @@
       {:g (first parts)
        :a (second parts)
        :v (last parts)})))
-
-;; ----------------------------------------------------------------------------------------------
-;; ----------------------------------------------------------------------------------------------
-;; # REFACTORING
-;;
-;; Temporary. Private helpers.
-;; ----------------------------------------------------------------------------------------------
-;;
-(comment
-  "Data structure reference"
-
-  artifact
-  {:maven    {#_"artifact-info from indexer module"}
-   :manifest {#_"manifest attributes from manifest parser"}}
-
-  qualname
-  ;; qualified name of an artifact
-  "~qualifier~/~artifact-name~"
-  ;; currently it's safe to assume...
-  "artifactId-of-root/bundle-symbolic-name"
-
-  artifact-map
-  {qualname1 artifact1
-   qualname2 artifact2}
-
-  edge
-  {:to "" :from "" :cause "" :type ""}
-
-  (comment))
-
-(defn- artifacts->edges
-  ;; Next - when this is called, cache results, don't map TODO
-  ;; Only map when original artifact map is available to pull data from for graph attrs
-  "Given a collection of artifacts, returns a list of edges."
-  [artifact-map]
-  (let [connectors [manifest/artifacts->edges]]
-    (->> connectors
-         (map #(% artifact-map))
-         (flatten)
-         (distinct))))
-
-;;
-;; ----------------------------------------------------------------------------------------------
-;; New aggregation chain that preserves the original data for as long as possible.
-;; ----------------------------------------------------------------------------------------------
-;;
-
-(defn- apply-manifest [artifact]
-  (assoc artifact :manifest
-                  (manifest/parse-content (get-in artifact [:maven :attrs "JAR_MANIFEST"]))))
-
-(defn- aggregate-with-all [g a v]
-  (->> (index/gather-hierarchy g a v)
-       (filter #(= (:packaging %) "bundle"))
-       (filter #(= (:file-ext %) "jar"))
-       (map #(hash-map :maven %))
-       (map apply-manifest)
-       (map #(vector (str a "/" (get-in % [:manifest ::manifest/Bundle-SymbolicName])) %))
-       (into {})))
 
 ;;
 ;; ----------------------------------------------------------------------------------------------
@@ -318,19 +135,6 @@
   (let [id (get-in artifact [:maven :artifact-id])]
     (add-attr graph qualname :api-flag (.contains id "api"))))
 
-(comment
-  (categorize "my-security-api")
-  (categorize "my-security-bundle")
-  (categorize "my-admin-solr-bundle")
-  (categorize "my-spatial-wfs-ogc-bundle")
-  (categorize "my-catalog-plugin")
-  (categorize "my-catalog-bundle")
-  (categorize "my-catalog-transformer")
-  (categorize "my-platform-micrometer-impl")
-  (categorize "my-platform-bundle")
-  (categorize "aimalr")
-  (comment))
-
 ;;
 ;; ----------------------------------------------------------------------------------------------
 ;; Creates a Loom graph with artifact metadata embedded into the nodes and edges as attributes.
@@ -347,12 +151,12 @@
 (defn- with-node-attrs
   "Reducing function that adds maven artifact metadata to graph node attributes."
   [graph [qualname artifact]]
-  ;; If Loom complains about a 'string' not satisfying the 'Edge' protocol, it just means
+  ;; If Loom complains about a 'string' not satisfying the 'Edge' protocol, it might mean
   ;; the node/edge doesn't exist so can't be used to tweak attributes
   (when (not (has-node? graph qualname))
     (throw (IllegalArgumentException. (str "Could not find " qualname " in nodes"))))
-  (let [add-mvn-attr (fn [g node art key]
-                       (add-attr g node key (get-in art [:maven key])))]
+  (let [add-mvn-attr (fn [g node artifact key]
+                       (add-attr g node key (get-in artifact [:maven key])))]
     (-> graph
         (add-category qualname artifact)
         (add-api-flag qualname artifact)
@@ -361,8 +165,18 @@
         (add-mvn-attr qualname artifact :version)
         (add-mvn-attr qualname artifact :packaging))))
 
-(defn- create-graph-with-attrs
-  "Creates a graph with original metadata preserved as graph attributes."
+(defn- artifacts->edges
+  "Given a collection of artifacts, returns a list of edges."
+  [artifact-map]
+  (let [connectors [manifest/artifacts->edges]]
+    (->> connectors
+         (map #(% artifact-map))
+         (flatten)
+         (distinct))))
+
+(defn create-graph-with-attrs
+  "Given a collection of artifacts, creates a graph with original metadata preserved as
+  graph attributes."
   [artifact-map]
   (let [edges (artifacts->edges artifact-map)
         ;; Vector used to setup (Uber)graph using edge descriptor: [source, destination, attributes]
@@ -374,37 +188,40 @@
           (reduce with-node-attrs g pairs))))
 
 (comment
+  ;; Preview raw graph
+  (create-graph-with-attrs (create-artifact-map "ddf" "ddf" "2.19.5"))
+  ;; Generate simpler, hard-coded graph
   (-> (uber/ubergraph true false [:a :b])
       (add-attr [:a :b] "k" "v")
       (add-nodes "mystr")
       (edges)
       (first)
       (dest))
-
-  (create-graph-with-attrs
-    (aggregate-with-all "ddf" "ddf" "2.19.5"))
-
   (comment))
 
 ;;
 ;; ----------------------------------------------------------------------------------------------
-;; Original aggregation chain that collapses the data down to just manifests.
+;; Aggregation chain that preserves the original data.
 ;; ----------------------------------------------------------------------------------------------
 ;;
 
-(defn- aggregate-from-m2 [g a v]
+(defn- add-manifest [artifact]
+  (assoc artifact :manifest
+                  ;; Add keyword mapping / insulation for mvn-indexer attributes TODO
+                  (manifest/parse-content (get-in artifact [:maven :attrs "JAR_MANIFEST"]))))
+
+(defn create-artifact-map-bundles-only [g a v]
   (->> (index/gather-hierarchy g a v)
        (filter #(= (:packaging %) "bundle"))
        (filter #(= (:file-ext %) "jar"))
-       ;; Add keyword mapping / insulation for mvn-indexer attributes TODO
-       (map #(get-in % [:attrs "JAR_MANIFEST"]))
-       (map #(manifest/parse-content %))
-       (map #(vector (str a "/" (::manifest/Bundle-SymbolicName %)) %))
+       (map #(hash-map :maven %))
+       (map add-manifest)
+       (map #(vector (str a "/" (get-in % [:manifest ::manifest/Bundle-SymbolicName])) %))
        (into {})))
 
+;;
 ;; ----------------------------------------------------------------------------------------------
-;; ----------------------------------------------------------------------------------------------
-;; # Public CLI
+;; Public CLI
 ;;
 ;; Commands the user invokes directly.
 ;; Convenience commands for navigating to specific directories.
@@ -437,7 +254,7 @@
         dissoc-type #(dissoc % :type)]
     (->> gather
          (map gav)
-         (map #(aggregate-with-all (:g %) (:a %) (:v %)))
+         (map #(create-artifact-map-bundles-only (:g %) (:a %) (:v %)))
          (apply merge)
          (artifacts->edges)
          (filter (query/selection->predicate select))
@@ -461,7 +278,7 @@
              select default-select}}]
   (->> gather
        (map gav)
-       (map #(aggregate-with-all (:g %) (:a %) (:v %)))
+       (map #(create-artifact-map-bundles-only (:g %) (:a %) (:v %)))
        (apply merge)
        (artifacts->edges)
        (filter (query/selection->predicate select))
@@ -480,7 +297,7 @@
              select default-select}}]
   (->> gather
        (map gav)
-       (map #(aggregate-with-all (:g %) (:a %) (:v %)))
+       (map #(create-artifact-map-bundles-only (:g %) (:a %) (:v %)))
        (apply merge)
        #_(artifacts->edges)
        (create-graph-with-attrs)
@@ -494,62 +311,27 @@
   (export-graph :select [:node "ddf/.*"])
   (list-edges)
   (draw-graph)
-  (open-tmp-dir)
+  (open-tmp-dir))
 
-  "Import-Package: javax.activation\r"
-  "Import-Package: javax.xml.bind,javax.xml.bind.annotation.adapters,java\\r\n x.xml.transform,org.w3c.dom"
-  "Export-Service: org.codice.ddf.branding.BrandingPlugin\\r"
-  "Export-Service: org.codice.ddf.admin.application.plugin.ApplicationPlu\\r\n gin"
-
-  (index/open-indexer!)
-  (frequencies)
-  (manifest/parse-content "Export-Package: this.package.exported;also.this.one;and.this.one;")
-  (manifest/parse-content "Export-Package: this.package.exported,also.this.one,and.this.one;")
-  (->> default-gather
-       (map gav)
-       (map #(aggregate-with-all (:g %) (:a %) (:v %)))
-       (apply merge)
-       ;; catalog-core-api
-       #_(and (.contains m "Export-Service:")
-              (> ecount 3)
-              (not (.contains m ";"))
-              (not (.contains m "uses:="))
-              (not (.contains m "version=")))
-       #_(filter #(let [m (get-in (val %) [:manifest ::manifest/Export-Service])]
-                    (if (nil? m) false (not (.contains m ";")))))
-       #_(into {})))
-
+;;
 ;; ----------------------------------------------------------------------------------------------
-;; ----------------------------------------------------------------------------------------------
-;; # Namespace execution samples & support functions.
+;; Namespace execution samples & support functions.
 ;;
 ;; Pre-defined evaluation samples for the above.
 ;; ----------------------------------------------------------------------------------------------
 ;;
 
-(defn invoke-with
-  "Takes a function f that requires named args and invokes it using the
-  provided named-args map."
-  [f named-args]
-  (->> (seq named-args) (apply concat) (apply f)))
-
-(defn show-args
-  [& {:keys [gather select]
-      :or   {gather default-gather
-             select default-select}}]
-  {:gather gather :select select})
-
 (comment
+  ;; Defaults
   default-gather
-  ;; Invocation & mapping
-  (invoke-with draw-graph {:select [] :gather [] :extra 0})
-  (show-args)
-  (show-args :gather [(mvn "ddf" "2.23.1")])
+  default-select
+
   ;; Testing
   (list-edges)
   (draw-graph)
   (list-edges :gather [(mvn "ddf" "2.23.1")] :max 200 :cause? true :type? true)
   (draw-graph :gather [(mvn "ddf" "2.23.1")])
+
   ;; Mvn / GAV
   (mvn "ddf" "2.19.5")
   (mvn "group" "ddf" "12.17.8")
@@ -557,16 +339,11 @@
   (gav "hi")
   (gav "mvn:")
   (gav "mvn://")
+
   ;; Indexer Lifecycle
   (index/open-indexer!)
   (index/close-indexer!)
+
   ;; Artifact aggregation from maven
   (index/gather-hierarchy "ddf" "ddf" "2.19.5")
-  (aggregate-from-m2 "ddf" "ddf" "2.19.5")
-  (aggregate-with-all "ddf" "ddf" "2.19.5")
-  ;; Composition ideas
-  (draw-graph :select [])
-  (draw-graph-with :select [])
-  (draw-graph-with {:select []})
-  (draw-graph (with :select []))
-  (draw-graph (with-opts {:select []})))
+  (create-artifact-map-bundles-only "ddf" "ddf" "2.19.5"))
